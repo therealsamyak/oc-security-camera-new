@@ -24,7 +24,9 @@ Additionally, we need to simulate battery charging. Modern devices support up to
 
 Our custom controller is as described in the earlier section, where it takes in the data, processes it internally somehow, then outputs a model which is then loaded into our camera.
 
-We need code to implement this controller. Because this is a weight optimization problem, we should be able to do some machine learning approach to find the best weights, using our datasets.
+Because this is a weight optimization problem, we should be able to do some machine learning approach to find the best weights, using our clean energy datasets and a MIPS solver (similar to the ORACLE controller mentioned later in this document).
+
+Using those weights, we should be able to implement the controller and abstract it out as a function, such that we input all necessary information, and it ouputs the model it picks.
 
 ### Benchmarking
 
@@ -56,3 +58,11 @@ There are 4 different controllers, with potentially more to be added later:
 - "Total Clean Energy Used": Total amount of clean energy used by the battery over the course of the simulation.
 
 In short, we have 4 days, with 4 locations, with 4 controllers, and 3 different accuracy/latency metrics, for a grand total of 192 simulations.
+
+### Major High-Level Deliverables
+
+- Code to benchmark power consumption of each model task call.
+- Code to train the custom controller.
+- Code to run the simulations. (which integrates the above 2 deliverables)
+
+Ensure that all code is future-proof and can be easily modified to add more controllers, metrics, or locations. Additionally ensure that it follows best practices with Python. 
