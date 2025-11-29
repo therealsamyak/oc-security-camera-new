@@ -16,7 +16,7 @@ dist/
 venv/
 
 # Environment files
-.env
+.env*
 !.env.example
 
 # uv
