@@ -45,7 +45,7 @@ We will run the simulation for 4 weeks, one from every season.
 There are 4 different controllers, with potentially more to be added later:
 
 - **OUR CUSTOM CONTROLLER**: Picks the model based on accuracy, latency, clean energy. Battery charging also determined by this controller. This controller will use an algorithm that gives weights to the user-defined accuracy & latency, the cleanliness of the energy coming in, and the existing model benchmarks provided by the YOLOv10 team.
-- **ORACLE (OMNISCIENT)**: Takes in all problem information (historical clean energy data, accuracy, latency requirements), and uses a Mixed-Integer Linear Programming (MILP) solver (python has many pre-existing libraries that do this) to maximize the amount of clean energy used ONLY. Due to the nature of MILP solvers, optimizing for a proportion won’t work, hence why we are optimizing for amount of clean energy consumed instead. Because this is the oracle controller, it can see the future and has full system knowledge of the clean energy information of that day, hence why an MILP solver is appropriate. *We don't expect our custom controller to beat it*.
+- **ORACLE (OMNISCIENT)**: Takes in all problem information (historical clean energy data, accuracy, latency requirements), and uses a Mixed-Integer Linear Programming (MILP) solver (python has many pre-existing libraries that do this) to maximize the amount of clean energy used ONLY. Due to the nature of MILP solvers, optimizing for a proportion won’t work, hence why we are optimizing for amount of clean energy consumed instead. Because this is the oracle controller, it can see the future and has full system knowledge of the clean energy information of that day, hence why an MILP solver is appropriate. _We don't expect our custom controller to beat it_.
 - **NAIVE WEAK**: Always picks the smallest model, charges battery only when necessary.
 - **NAIVE STRONG**: Always picks the largest model, charges battery only when necessary.
 - There is a chance that we will add more controllers later based on pre-existing research papers, but for now do not worry about it. Just ensure that any implementation is future-proof such that its easier to add more later.
@@ -66,6 +66,7 @@ In short, we have **4 weeks, 4 locations, 4 controllers, 3 different accuracy/la
 - Code to run the simulations, and output a CSV file with metrics described in earlier sections. (which integrates the above 2 deliverables)
 
 #### Important Code-related Instructions
+
 - Ensure all code has detailed logging, so we can see what's happening at each step.
-- Ensure that all code is future-proof and can be easily modified to add more controllers, metrics, or locations. Additionally ensure that it follows best practices with Python. 
+- Ensure that all code is future-proof and can be easily modified to add more controllers, metrics, or locations. Additionally ensure that it follows best practices with Python.
 - Ensure all code / files are organized appropriately, according to best engineering practices with object-oriented and/or functional programming.
