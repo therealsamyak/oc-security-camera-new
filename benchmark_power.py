@@ -38,25 +38,24 @@ def main():
     # Load existing profiles if any
     profiler.load_profiles()
 
-    # Benchmark all models on both images
-    for image_path in [image1, image2]:
-        logger.info(f"Benchmarking models on {image_path}")
-        profiles = profiler.benchmark_all_models(str(image_path), iterations=400)
+    # Benchmark all models on image2 only
+    logger.info(f"Benchmarking models on {image2}")
+    profiles = profiler.benchmark_all_models(str(image2), iterations=100)
 
-        # Print results
-        print(f"\nPower Benchmark Results for {image_path.name}:")
-        print("-" * 60)
-        for model_key, profile in profiles.items():
-            print(f"{model_key}:")
-            print(f"  Model Power: {profile['model_power_mw']:.2f} mW")
-            print(
-                f"  Energy per Inference: {profile['energy_per_inference_mwh']:.6f} mWh"
-            )
-            print(
-                f"  Avg Inference Time: {profile['avg_inference_time_seconds']:.3f} s"
-            )
-            print(f"  Success Rate: {profile['success_rate']:.2%}")
-            print()
+    # Print results
+    print(f"\nPower Benchmark Results for {image2.name}:")
+    print("-" * 60)
+    for model_key, profile in profiles.items():
+        print(f"{model_key}:")
+        print(f"  Model Power: {profile['model_power_mw']:.2f} mW")
+        print(
+            f"  Energy per Inference: {profile['energy_per_inference_mwh']:.6f} mWh"
+        )
+        print(
+            f"  Avg Inference Time: {profile['avg_inference_time_seconds']:.3f} s"
+        )
+        print(f"  Success Rate: {profile['success_rate']:.2%}")
+        print()
 
     logger.info("Power benchmarking complete!")
     return 0
