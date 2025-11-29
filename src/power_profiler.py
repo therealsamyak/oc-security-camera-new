@@ -282,11 +282,10 @@ class PowerProfiler:
             else:
                 self.logger.error(f"Inference failed on iteration {i + 1}")
 
-            # Progress indicator for long runs
-            if (i + 1) % 10 == 0:
-                self.logger.info(
-                    f"Completed {i + 1}/{iterations} iterations for {model_name} v{model_version}"
-                )
+            # Progress indicator for each iteration
+            self.logger.info(
+                f"Iteration {i + 1}/{iterations} for {model_name} v{model_version}"
+            )
 
             # Longer delay between iterations for system stabilization
             time.sleep(4.0)
