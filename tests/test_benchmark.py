@@ -7,6 +7,9 @@ import sys
 import logging
 from pathlib import Path
 
+# Add src to path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
 from power_profiler import PowerProfiler
 from logging_config import setup_logging
 

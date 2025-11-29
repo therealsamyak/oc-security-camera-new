@@ -1,11 +1,15 @@
-import psutil
 import time
 import logging
 import json
 import subprocess
 import re
+import os
 from typing import Dict, List, Tuple
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv(".env.local")
 
 
 class PowerProfiler:
@@ -15,7 +19,12 @@ class PowerProfiler:
         self.logger = logging.getLogger(__name__)
         self.power_profiles: Dict[str, Dict] = {}
         self.profiles_file = Path("results/power_profiles.json")
-        self.use_powermetrics = self._check_powermetrics_available()
+
+        # Require powermetrics - no fallback
+        if not self._check_powermetrics_available():
+            raise RuntimeError(
+                "powermetrics is required and not available. This tool only works on macOS with powermetrics."
+            )
 
     def _check_powermetrics_available(self) -> bool:
         """Check if powermetrics is available (macOS only)."""
@@ -27,11 +36,11 @@ class PowerProfiler:
                 self.logger.info("Using powermetrics for accurate power measurement")
                 return True
             else:
-                self.logger.warning("powermetrics not found, falling back to psutil")
+                self.logger.error("powermetrics not found - powermetrics is required")
                 return False
         except Exception:
-            self.logger.warning(
-                "Failed to check powermetrics availability, using psutil"
+            self.logger.error(
+                "Failed to check powermetrics availability - powermetrics is required"
             )
             return False
 
@@ -67,13 +76,14 @@ class PowerProfiler:
     def _parse_power_line(self, line: str) -> float:
         """Parse power from powermetrics output line."""
         try:
-            # Extract power value from lines like "CPU Power: 15.23 mW"
-            match = re.search(r"(\d+\.?\d*)\s*mW", line)
+            # Extract power value from lines like "CPU Power: 112 mW"
+            # or "Combined Power (CPU + GPU + ANE): 132 mW"
+            match = re.search(r":\s*(\d+\.?\d*)\s*mW", line, re.IGNORECASE)
             if match:
                 return float(match.group(1))
 
-            # Handle cases with different units
-            match = re.search(r"(\d+\.?\d*)\s*W", line)
+            # Handle cases with different units (W instead of mW)
+            match = re.search(r":\s*(\d+\.?\d*)\s*W", line, re.IGNORECASE)
             if match:
                 return float(match.group(1)) * 1000.0  # Convert W to mW
 
@@ -86,66 +96,130 @@ class PowerProfiler:
         self, func, *args, **kwargs
     ) -> Tuple[float, List[Tuple[float, str]]]:
         """Measure power consumption during function execution using powermetrics."""
-        # For now, use psutil fallback since powermetrics requires sudo
-        return self._measure_with_psutil(func, *args, **kwargs)
+        import threading
+        import time
 
-    def _measure_with_psutil(
-        self, func, *args, **kwargs
-    ) -> Tuple[float, List[Tuple[float, str]]]:
-        """Measure power consumption using psutil fallback."""
-        pre_power = self.measure_system_power()
+        power_samples = []
+        sampling = True
+
+        def sample_power():
+            try:
+                # Get sudo password from environment
+                sudo_password = os.getenv("SUDO_PASSWORD")
+                if not sudo_password:
+                    raise RuntimeError("SUDO_PASSWORD environment variable not set")
+
+                # Start powermetrics with password from stdin
+                proc = subprocess.Popen(
+                    [
+                        "sudo",
+                        "-S",  # Read password from stdin
+                        "powermetrics",
+                        "--samplers",
+                        "cpu_power,gpu_power",
+                        "-i",
+                        "500",  # 500ms interval for more stable readings
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    stdin=subprocess.PIPE,
+                    text=True,
+                )
+
+                # Send password to stdin
+                if proc.stdin:
+                    proc.stdin.write(sudo_password + "\n")
+                    proc.stdin.flush()
+
+                # Read all output and process line by line
+                while sampling and proc.poll() is None:
+                    try:
+                        if proc.stdout:
+                            line = proc.stdout.readline()
+                            if not line:
+                                break
+                            line = line.strip()
+                        else:
+                            continue
+
+                        # Look for Combined Power line which is most comprehensive
+                        if "Combined Power (CPU + GPU + ANE):" in line:
+                            power_value = self._parse_power_line(line)
+                            if power_value > 0:
+                                power_samples.append(power_value)
+                                self.logger.debug(
+                                    f"Combined Power sample: {power_value} mW"
+                                )
+
+                        # Also capture individual CPU and GPU power as fallback
+                        elif "CPU Power:" in line:
+                            power_value = self._parse_power_line(line)
+                            if power_value > 0:
+                                power_samples.append(power_value)
+                                self.logger.debug(f"CPU Power sample: {power_value} mW")
+
+                        elif "GPU Power:" in line:
+                            power_value = self._parse_power_line(line)
+                            if power_value > 0:
+                                power_samples.append(power_value)
+                                self.logger.debug(f"GPU Power sample: {power_value} mW")
+
+                    except Exception as e:
+                        self.logger.debug(f"Error reading line: {e}")
+                        continue
+
+                # Terminate process gracefully
+                proc.terminate()
+                try:
+                    proc.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+
+            except Exception as e:
+                self.logger.error(f"Powermetrics sampling failed: {e}")
+                # Check if it's a sudo permission issue
+                if "permission denied" in str(e).lower() or "sudo" in str(e).lower():
+                    self.logger.error(
+                        "Sudo permission issue. Please run 'sudo powermetrics --samplers cpu_power,gpu_power -i 1000' once to cache credentials."
+                    )
+
+        # Start sampling thread
+        sampler_thread = threading.Thread(target=sample_power, daemon=True)
+        sampler_thread.start()
+
+        # Give powermetrics time to start and get first reading
+        time.sleep(1.0)
+
+        # Clear initial samples to get fresh baseline
+        power_samples.clear()
+
+        # Run the function
         func(*args, **kwargs)
-        post_power = self.measure_system_power()
 
-        avg_power = (pre_power + post_power) / 2.0
-        return avg_power, []
+        # Continue sampling for a bit more to capture power draw
+        time.sleep(0.5)
 
-    def measure_system_power(self) -> float:
-        """
-        Measure current system power consumption in milliwatts.
+        # Stop sampling
+        sampling = False
+        sampler_thread.join(timeout=3)
 
-        Returns:
-            Estimated power consumption in milliwatts
-        """
-        # Direct psutil measurement without recursion
-        try:
-            # Get CPU usage over a short interval for more stable reading
-            cpu_percent = psutil.cpu_percent(interval=0.5)
+        # Log sample count for debugging
+        self.logger.info(f"Collected {len(power_samples)} power samples")
 
-            # Get CPU frequency
-            cpu_freq = psutil.cpu_freq()
-            _ = cpu_freq.current / 1000.0 if cpu_freq else 2.5  # Default 2.5GHz
+        # Calculate median power
+        if power_samples:
+            sorted_samples = sorted(power_samples)
+            mid = len(sorted_samples) // 2
+            if len(sorted_samples) % 2 == 0:
+                median_power = (sorted_samples[mid - 1] + sorted_samples[mid]) / 2
+            else:
+                median_power = sorted_samples[mid]
+        else:
+            raise RuntimeError(
+                "No power samples collected - check powermetrics output format"
+            )
 
-            # Get memory usage
-            memory = psutil.virtual_memory()
-            memory_percent = memory.percent
-
-            # More realistic power estimation based on typical laptop/desktop power profiles
-            # Base power: idle system (CPU, memory, storage, display)
-            base_power_watts = 15.0  # More realistic base power
-
-            # CPU power: TDP-based estimation (more conservative)
-            # Typical laptop CPU TDP: 15-45W, desktop: 65-150W
-            max_cpu_power_watts = 45.0  # Conservative estimate for laptop CPU
-            cpu_power_watts = (cpu_percent / 100.0) * max_cpu_power_watts
-
-            # Memory power: DDR4/DDR5 typically uses 2-5W per 8GB
-            memory_gb = memory.total / (1024**3)
-            memory_power_watts = (
-                (memory_percent / 100.0) * memory_gb * 0.3
-            )  # 0.3W per GB at full load
-
-            total_power_watts = base_power_watts + cpu_power_watts + memory_power_watts
-            total_power_mw = total_power_watts * 1000.0
-
-            # Clamp to reasonable bounds (10W - 150W)
-            total_power_mw = max(10000.0, min(150000.0, total_power_mw))
-
-            return total_power_mw
-
-        except Exception as e:
-            self.logger.error(f"Power measurement failed: {e}")
-            return 25000.0  # Default 25W estimate (more realistic)
+        return median_power, []
 
     def benchmark_model_power(
         self, model_name: str, model_version: str, image_path: str, iterations: int = 50
@@ -162,7 +236,7 @@ class PowerProfiler:
         Returns:
             Dictionary with power profiling results
         """
-        from .yolo_model import YOLOModel
+        from yolo_model import YOLOModel
 
         self.logger.info(
             f"Benchmarking {model_name} v{model_version} power consumption"
@@ -171,38 +245,22 @@ class PowerProfiler:
         # Create model instance
         model = YOLOModel(model_name, model_version)
 
-        # Take baseline measurements
-        if self.use_powermetrics:
+        # Take baseline measurements using powermetrics
+        def baseline_task():
+            time.sleep(2.0)  # Longer baseline for stable measurement
 
-            def baseline_task():
-                time.sleep(1.0)
-
-            baseline_power, _ = self._measure_with_powermetrics(baseline_task)
-        else:
-            baseline_measurements = []
-            for _ in range(3):
-                baseline_measurements.append(self.measure_system_power())
-                time.sleep(0.5)
-            baseline_power = sum(baseline_measurements) / len(baseline_measurements)
+        baseline_power, _ = self._measure_with_powermetrics(baseline_task)
 
         time.sleep(1)  # Let system stabilize
 
         # Load model
         model.load_model()
 
-        # Measure idle power
-        if self.use_powermetrics:
+        # Measure idle power using powermetrics
+        def idle_task():
+            time.sleep(2.0)  # Longer idle measurement for stability
 
-            def idle_task():
-                time.sleep(1.0)
-
-            idle_power, _ = self._measure_with_powermetrics(idle_task)
-        else:
-            idle_measurements = []
-            for _ in range(3):
-                idle_measurements.append(self.measure_system_power())
-                time.sleep(0.5)
-            idle_power = sum(idle_measurements) / len(idle_measurements)
+        idle_power, _ = self._measure_with_powermetrics(idle_task)
 
         # Run inference benchmark
         start_time = time.time()
@@ -210,22 +268,14 @@ class PowerProfiler:
         successful_inferences = 0
 
         for i in range(iterations):
-            if self.use_powermetrics:
-                # Use powermetrics for each inference
-                def inference_task():
-                    return model.run_inference(image_path)
+            # Use powermetrics for each inference
+            def inference_task():
+                return model.run_inference(image_path)
 
-                avg_power, samples = self._measure_with_powermetrics(inference_task)
-                # Need to actually run inference to get result
-                success, detections = model.run_inference(image_path)
-                inference_powers.append(avg_power)
-            else:
-                # Fallback to psutil method
-                pre_inference_power = self.measure_system_power()
-                success, detections = model.run_inference(image_path)
-                post_inference_power = self.measure_system_power()
-                avg_inference_power = (pre_inference_power + post_inference_power) / 2.0
-                inference_powers.append(avg_inference_power)
+            avg_power, samples = self._measure_with_powermetrics(inference_task)
+            # Need to actually run inference to get result
+            success, detections = model.run_inference(image_path)
+            inference_powers.append(avg_power)
 
             if success:
                 successful_inferences += 1
@@ -238,37 +288,41 @@ class PowerProfiler:
                     f"Completed {i + 1}/{iterations} iterations for {model_name} v{model_version}"
                 )
 
-            # Small delay between iterations
-            time.sleep(0.05)
+            # Longer delay between iterations for system stabilization
+            time.sleep(1.0)
 
         end_time = time.time()
         total_duration = end_time - start_time
 
         # Calculate statistics with outlier removal for more stable results
         sorted_powers = sorted(inference_powers)
-        # Remove top and bottom 10% as outliers for high iteration counts
-        if iterations >= 20:
-            trim_count = max(1, iterations // 10)
+        # Remove top and bottom 20% as outliers for consistency
+        if iterations >= 5:
+            trim_count = max(1, iterations // 5)
             trimmed_powers = sorted_powers[trim_count:-trim_count]
         else:
             trimmed_powers = sorted_powers
 
-        avg_inference_power = sum(trimmed_powers) / len(trimmed_powers)
+        # Use median instead of average for inference power
+        mid = len(trimmed_powers) // 2
+        if len(trimmed_powers) % 2 == 0:
+            avg_inference_power = (trimmed_powers[mid - 1] + trimmed_powers[mid]) / 2
+        else:
+            avg_inference_power = trimmed_powers[mid]
         max_inference_power = max(trimmed_powers)
         min_inference_power = min(trimmed_powers)
 
         # Calculate model-specific power (difference from baseline)
-        model_power_mw = (
-            max(0, avg_inference_power - baseline_power)
-            if avg_inference_power > baseline_power
-            else max(0, baseline_power - avg_inference_power)
-        )
+        # Use absolute difference to get actual additional power consumption
+        model_power_mw = abs(avg_inference_power - baseline_power)
 
         # Calculate energy per inference using actual inference time (not total duration)
         avg_inference_time_seconds = total_duration / iterations
         energy_per_inference_mwh = (
-            model_power_mw * avg_inference_time_seconds
-        ) / 3600.0
+            (model_power_mw * avg_inference_time_seconds) / 3600.0
+            if model_power_mw > 0
+            else 0.0
+        )
 
         profile = {
             "model_name": model_name,
@@ -287,7 +341,7 @@ class PowerProfiler:
             "outliers_removed": iterations - len(trimmed_powers)
             if iterations >= 20
             else 0,
-            "measurement_method": "powermetrics" if self.use_powermetrics else "psutil",
+            "measurement_method": "powermetrics",
         }
 
         # Store profile
