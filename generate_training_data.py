@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""
+MIPS solver to generate training data for CustomController.
+Generates optimal decisions for diverse scenarios and caches to JSON.
+"""
+
+import json
+import pulp
+import itertools
+from typing import Dict, List, Tuple
+import numpy as np
+
+
+def load_power_profiles() -> Dict[str, Dict[str, float]]:
+    """Load power profiles from results."""
+    with open("results/power_profiles.json", "r") as f:
+        profiles = json.load(f)
+
+    models = {}
+    for model_name, data in profiles.items():
+        models[model_name] = {
+            "accuracy": 85.0 + np.random.uniform(-5, 5),  # Mock accuracy
+            "latency": data["avg_inference_time_seconds"] * 1000,  # Convert to ms
+            "power_cost": data["model_power_mw"],
+        }
+
+    return models
+
+
+def solve_mips_scenario(
+    battery_level: float,
+    clean_energy_percentage: float,
+    accuracy_requirement: float,
+    latency_requirement: float,
+    available_models: Dict[str, Dict[str, float]],
+) -> Tuple[str, bool]:
+    """
+    Solve MIPS for a single scenario to get optimal model and charging decision.
+    """
+    prob = pulp.LpProblem("Training_Scenario", pulp.LpMaximize)
+
+    model_vars = {
+        name: pulp.LpVariable(f"use_{name}", cat="Binary")
+        for name in available_models.keys()
+    }
+    charge_var = pulp.LpVariable("charge", cat="Binary")
+
+    prob += (
+        pulp.lpSum(
+            [
+                available_models[name]["accuracy"] * model_vars[name]
+                for name in available_models.keys()
+            ]
+        )
+        - 0.001
+        * pulp.lpSum(
+            [
+                available_models[name]["latency"] * model_vars[name]
+                for name in available_models.keys()
+            ]
+        )
+        + 0.01 * clean_energy_percentage * charge_var
+    )
+
+    prob += pulp.lpSum(model_vars.values()) == 1
+
+    for name, specs in available_models.items():
+        if specs["accuracy"] < accuracy_requirement:
+            prob += model_vars[name] == 0
+        if specs["latency"] > latency_requirement:
+            prob += model_vars[name] == 0
+
+    prob += battery_level + charge_var * 10 <= 100
+
+    prob.solve(pulp.PULP_CBC_CMD(msg=False))
+
+    selected_model = list(available_models.keys())[0]
+    for name, var in model_vars.items():
+        if pulp.value(var) == 1:
+            selected_model = name
+            break
+
+    should_charge = pulp.value(charge_var) == 1
+
+    return selected_model, should_charge
+
+
+def generate_training_scenarios() -> List[Tuple[int, int, int, int]]:
+    """Generate diverse training scenarios."""
+    battery_levels = list(range(5, 101, 5))  # 5% to 100%
+    clean_energy_levels = list(range(0, 101, 10))  # 0% to 100%
+    accuracy_requirements = list(range(70, 96, 5))  # 70% to 95%
+    latency_requirements = list(range(1000, 3001, 250))  # 1000ms to 3000ms
+
+    all_combinations = list(
+        itertools.product(
+            battery_levels,
+            clean_energy_levels,
+            accuracy_requirements,
+            latency_requirements,
+        )
+    )
+
+    # Sample 10,000 combinations if too many
+    if len(all_combinations) > 10000:
+        np.random.shuffle(all_combinations)
+        all_combinations = all_combinations[:10000]
+
+    return all_combinations
+
+
+def main():
+    """Generate training data and save to JSON."""
+    print("Loading power profiles...")
+    models = load_power_profiles()
+
+    print("Generating training scenarios...")
+    scenarios = generate_training_scenarios()
+
+    print(f"Solving MIPS for {len(scenarios)} scenarios...")
+    training_data = []
+
+    for i, (battery, clean_energy, acc_req, lat_req) in enumerate(scenarios):
+        if i % 1000 == 0:
+            print(f"Progress: {i}/{len(scenarios)}")
+
+        try:
+            selected_model, should_charge = solve_mips_scenario(
+                battery, clean_energy, acc_req, lat_req, models
+            )
+
+            training_data.append(
+                {
+                    "battery_level": battery,
+                    "clean_energy_percentage": clean_energy,
+                    "accuracy_requirement": acc_req,
+                    "latency_requirement": lat_req,
+                    "optimal_model": selected_model,
+                    "should_charge": should_charge,
+                }
+            )
+        except Exception as e:
+            print(f"Error solving scenario {i}: {e}")
+            continue
+
+    print(f"Generated {len(training_data)} training samples")
+
+    # Save to JSON
+    with open("results/training_data.json", "w") as f:
+        json.dump(training_data, f, indent=2)
+
+    print("Training data saved to results/training_data.json")
+
+
+if __name__ == "__main__":
+    main()

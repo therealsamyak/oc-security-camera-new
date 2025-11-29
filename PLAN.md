@@ -28,19 +28,26 @@
 ## Phase 3: Controller Implementation
 
 ### 1. Base Controllers
-- [ ] NaiveWeakController: always smallest model
-- [ ] NaiveStrongController: always largest model
-- [ ] OracleController: PuLP MILP solver using future knowledge
+- [X] NaiveWeakController: always smallest model, charge only when battery ≤ 20%
+- [X] NaiveStrongController: always largest model, charge only when battery ≤ 20%
+- [X] OracleController: PuLP MILP solver using future knowledge, charges when clean energy percentage is maximal
 
 ### 2. Custom Controller Training
-- [ ] Uses MIPS solver on existing data to get the correct results on when to charge / switch models, which is then filtered into training, validation, and test data for our algorithm. To avoid subsequent MIPS solving, try and reuse this data as much as possible by 'caching' it as .json or .csv files that can be later called upon.
-- [ ] Gradient descent with loss: α * (1 - accuracy) + β * latency + γ * non-clean-energy-usage
-- [ ] Optimize weights for accuracy, latency, clean energy factors
-- [ ] Implement CustomController that utilizes trained weights
+- [X] Create MIPS solver to generate training data with diverse scenarios:
+  - Battery levels: 5-100% (step 5%)
+  - Clean energy: 0-100% (step 10%)
+  - Accuracy requirements: 70-95% (step 5%)
+  - Latency requirements: 1000-3000ms (step 250ms)
+  - Target: 10,000 training samples
+- [X] Cache MIPS results to JSON file for reuse
+- [X] Gradient descent training with dual outputs (model selection + charging decision):
+  - Loss: α * (1 - accuracy) + β * latency + γ * non-clean-energy-usage
+  - Initial weights: α=0.5, β=0.3, γ=0.2
+- [X] Implement CustomController that utilizes trained weights
 
 ### 3. Desired Functionality
-- [ ] A python file exists, such that running it would solve the MIPS problem and output the results to a json file as training data for the step below this.
-- [ ] A python file separate from the above-mentioned python file exists, such that running it would train the model from scratch and save the weights to a json file.
+- [X] A python file exists that solves the MIPS problem and outputs training data to JSON
+- [X] A python file exists that trains the CustomController from scratch and saves weights to JSON
 
 ## Phase 4: Simulation Engine
 
