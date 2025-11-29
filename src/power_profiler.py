@@ -289,7 +289,7 @@ class PowerProfiler:
                 )
 
             # Longer delay between iterations for system stabilization
-            time.sleep(1.0)
+            time.sleep(4.0)
 
         end_time = time.time()
         total_duration = end_time - start_time
