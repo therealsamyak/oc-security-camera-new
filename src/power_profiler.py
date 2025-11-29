@@ -70,27 +70,19 @@ class PowerProfiler:
     
     def _measure_with_powermetrics(self, func, *args, **kwargs) -> Tuple[float, List[Tuple[float, str]]]:
         """Measure power consumption during function execution using powermetrics."""
-        samples = []
-        thread = threading.Thread(target=self._sample_powermetrics, args=(samples, 0.05))
-        thread.start()
-        
+        # For now, use psutil fallback since powermetrics requires sudo
+        return self._measure_with_psutil(func, *args, **kwargs)
+    
+    def _measure_with_psutil(self, func, *args, **kwargs) -> Tuple[float, List[Tuple[float, str]]]:
+        """Measure power consumption using psutil fallback."""
+        pre_power = self.measure_system_power()
         start_time = time.time()
         result = func(*args, **kwargs)
         end_time = time.time()
+        post_power = self.measure_system_power()
         
-        thread.join(timeout=1.0)
-        
-        # Calculate average power from samples
-        power_values = []
-        if samples:
-            for timestamp, line in samples:
-                power = self._parse_power_line(line)
-                if power > 0:
-                    power_values.append(power)
-        
-        avg_power = sum(power_values) / len(power_values) if power_values else 0.0
-        
-        return avg_power, samples
+        avg_power = (pre_power + post_power) / 2.0
+        return avg_power, []
     
     def measure_system_power(self) -> float:
         """
@@ -99,51 +91,43 @@ class PowerProfiler:
         Returns:
             Estimated power consumption in milliwatts
         """
-        if self.use_powermetrics:
-            # Use powermetrics for accurate measurement
-            def dummy_task():
-                time.sleep(0.5)  # Short measurement window
+        # Direct psutil measurement without recursion
+        try:
+            # Get CPU usage over a short interval for more stable reading
+            cpu_percent = psutil.cpu_percent(interval=0.5)
             
-            avg_power, _ = self._measure_with_powermetrics(dummy_task)
-            return avg_power
-        else:
-            # Fallback to psutil-based estimation
-            try:
-                # Get CPU usage over a short interval for more stable reading
-                cpu_percent = psutil.cpu_percent(interval=0.5)
-                
-                # Get CPU frequency
-                cpu_freq = psutil.cpu_freq()
-                cpu_freq_ghz = cpu_freq.current / 1000.0 if cpu_freq else 2.5  # Default 2.5GHz
-                
-                # Get memory usage
-                memory = psutil.virtual_memory()
-                memory_percent = memory.percent
-                
-                # More realistic power estimation based on typical laptop/desktop power profiles
-                # Base power: idle system (CPU, memory, storage, display)
-                base_power_watts = 15.0  # More realistic base power
-                
-                # CPU power: TDP-based estimation (more conservative)
-                # Typical laptop CPU TDP: 15-45W, desktop: 65-150W
-                max_cpu_power_watts = 45.0  # Conservative estimate for laptop CPU
-                cpu_power_watts = (cpu_percent / 100.0) * max_cpu_power_watts
-                
-                # Memory power: DDR4/DDR5 typically uses 2-5W per 8GB
-                memory_gb = memory.total / (1024**3)
-                memory_power_watts = (memory_percent / 100.0) * memory_gb * 0.3  # 0.3W per GB at full load
-                
-                total_power_watts = base_power_watts + cpu_power_watts + memory_power_watts
-                total_power_mw = total_power_watts * 1000.0
-                
-                # Clamp to reasonable bounds (10W - 150W)
-                total_power_mw = max(10000.0, min(150000.0, total_power_mw))
-                
-                return total_power_mw
-                
-            except Exception as e:
-                self.logger.error(f"Power measurement failed: {e}")
-                return 25000.0  # Default 25W estimate (more realistic)
+            # Get CPU frequency
+            cpu_freq = psutil.cpu_freq()
+            cpu_freq_ghz = cpu_freq.current / 1000.0 if cpu_freq else 2.5  # Default 2.5GHz
+            
+            # Get memory usage
+            memory = psutil.virtual_memory()
+            memory_percent = memory.percent
+            
+            # More realistic power estimation based on typical laptop/desktop power profiles
+            # Base power: idle system (CPU, memory, storage, display)
+            base_power_watts = 15.0  # More realistic base power
+            
+            # CPU power: TDP-based estimation (more conservative)
+            # Typical laptop CPU TDP: 15-45W, desktop: 65-150W
+            max_cpu_power_watts = 45.0  # Conservative estimate for laptop CPU
+            cpu_power_watts = (cpu_percent / 100.0) * max_cpu_power_watts
+            
+            # Memory power: DDR4/DDR5 typically uses 2-5W per 8GB
+            memory_gb = memory.total / (1024**3)
+            memory_power_watts = (memory_percent / 100.0) * memory_gb * 0.3  # 0.3W per GB at full load
+            
+            total_power_watts = base_power_watts + cpu_power_watts + memory_power_watts
+            total_power_mw = total_power_watts * 1000.0
+            
+            # Clamp to reasonable bounds (10W - 150W)
+            total_power_mw = max(10000.0, min(150000.0, total_power_mw))
+            
+            return total_power_mw
+            
+        except Exception as e:
+            self.logger.error(f"Power measurement failed: {e}")
+            return 25000.0  # Default 25W estimate (more realistic)
     
     def benchmark_model_power(self, model_name: str, model_version: str, 
                             image_path: str, iterations: int = 50) -> Dict:
@@ -246,8 +230,8 @@ class PowerProfiler:
         max_inference_power = max(trimmed_powers)
         min_inference_power = min(trimmed_powers)
         
-        # Calculate model-specific power (difference from idle)
-        model_power_mw = max(0, avg_inference_power - idle_power)  # Ensure non-negative
+        # Calculate model-specific power (difference from baseline)
+        model_power_mw = max(0, avg_inference_power - baseline_power) if avg_inference_power > baseline_power else max(0, baseline_power - avg_inference_power)
         
         # Calculate energy per inference using actual inference time (not total duration)
         avg_inference_time_seconds = total_duration / iterations

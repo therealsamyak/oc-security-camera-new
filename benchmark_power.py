@@ -40,7 +40,7 @@ def main():
     # Benchmark all models on both images
     for image_path in [image1, image2]:
         logger.info(f"Benchmarking models on {image_path}")
-        profiles = profiler.benchmark_all_models(str(image_path), iterations=10)
+        profiles = profiler.benchmark_all_models(str(image_path), iterations=3)
         
         # Print results
         print(f"\nPower Benchmark Results for {image_path.name}:")
