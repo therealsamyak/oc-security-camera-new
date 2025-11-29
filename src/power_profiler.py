@@ -1,122 +1,353 @@
 import psutil
 import time
 import logging
-from typing import Dict, List, Optional
+import json
+import subprocess
+import threading
+import re
+from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 
 class PowerProfiler:
-    """Advanced power profiling using psutil for accurate measurement."""
+    """Comprehensive power measurement system using macOS powermetrics."""
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.battery_info = self._get_battery_info()
-    
-    def _get_battery_info(self) -> Dict:
-        """Get battery information if available."""
+        self.power_profiles: Dict[str, Dict] = {}
+        self.profiles_file = Path("results/power_profiles.json")
+        self.use_powermetrics = self._check_powermetrics_available()
+        
+    def _check_powermetrics_available(self) -> bool:
+        """Check if powermetrics is available (macOS only)."""
         try:
-            battery = psutil.sensors_battery()
-            if battery:
-                return {
-                    'has_battery': True,
-                    'percent': battery.percent,
-                    'power_plugged': battery.power_plugged,
-                    'secsleft': battery.secsleft
-                }
+            result = subprocess.run(['which', 'powermetrics'], 
+                                  capture_output=True, text=True)
+            if result.returncode == 0:
+                self.logger.info("Using powermetrics for accurate power measurement")
+                return True
+            else:
+                self.logger.warning("powermetrics not found, falling back to psutil")
+                return False
         except Exception:
-            pass
+            self.logger.warning("Failed to check powermetrics availability, using psutil")
+            return False
         
-        return {'has_battery': False}
-    
-    def measure_inference_power(self, inference_func, iterations: int = 10) -> Dict[str, float]:
-        """
-        Measure power consumption during inference.
-        
-        Args:
-            inference_func: Function to run inference
-            iterations: Number of iterations to run
+    def _sample_powermetrics(self, samples: List[Tuple[float, str]], interval: float = 0.1):
+        """Sample powermetrics output in a separate thread."""
+        try:
+            proc = subprocess.Popen(
+                ["sudo", "powermetrics", "--samplers", "cpu_power,gpu_power", "-i", str(int(interval*1000))],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            )
+            start = time.time()
             
-        Returns:
-            Dictionary with power metrics
-        """
-        # Get baseline measurements
-        baseline_cpu = psutil.cpu_percent(interval=1)
-        baseline_freq = psutil.cpu_freq()
-        baseline_freq_current = baseline_freq.current if baseline_freq else 0
+            if proc.stdout:
+                for line in proc.stdout:
+                    if "CPU Power" in line or "GPU Power" in line:
+                        samples.append((time.time() - start, line.strip()))
+                    
+            proc.terminate()
+        except Exception as e:
+            self.logger.error(f"Powermetrics sampling failed: {e}")
+    
+    def _parse_power_line(self, line: str) -> float:
+        """Parse power from powermetrics output line."""
+        try:
+            # Extract power value from lines like "CPU Power: 15.23 mW"
+            match = re.search(r'(\d+\.?\d*)\s*mW', line)
+            if match:
+                return float(match.group(1))
+            
+            # Handle cases with different units
+            match = re.search(r'(\d+\.?\d*)\s*W', line)
+            if match:
+                return float(match.group(1)) * 1000.0  # Convert W to mW
+                
+        except Exception as e:
+            self.logger.error(f"Failed to parse power line '{line}': {e}")
         
-        # Monitor system metrics during inference
-        cpu_samples = []
-        memory_samples = []
+        return 0.0
+    
+    def _measure_with_powermetrics(self, func, *args, **kwargs) -> Tuple[float, List[Tuple[float, str]]]:
+        """Measure power consumption during function execution using powermetrics."""
+        samples = []
+        thread = threading.Thread(target=self._sample_powermetrics, args=(samples, 0.05))
+        thread.start()
         
         start_time = time.time()
-        
-        for _ in range(iterations):
-            # Measure before inference
-            cpu_before = psutil.cpu_percent(interval=0.1)
-            memory_before = psutil.virtual_memory().percent
-            
-            # Run inference
-            try:
-                inference_func()
-            except Exception as e:
-                self.logger.error(f"Inference failed during profiling: {e}")
-                continue
-            
-            # Measure after inference
-            cpu_after = psutil.cpu_percent(interval=0.1)
-            memory_after = psutil.virtual_memory().percent
-            
-            cpu_samples.append(max(cpu_before, cpu_after))
-            memory_samples.append(max(memory_before, memory_after))
-        
+        result = func(*args, **kwargs)
         end_time = time.time()
-        duration = end_time - start_time
         
-        # Calculate averages
-        avg_cpu = sum(cpu_samples) / len(cpu_samples) if cpu_samples else 0
-        avg_memory = sum(memory_samples) / len(memory_samples) if memory_samples else 0
+        thread.join(timeout=1.0)
         
-        # Estimate power consumption
-        # This is a simplified model - real power measurement would need hardware-specific APIs
-        estimated_power_watts = self._estimate_power_from_cpu(avg_cpu, baseline_freq_current)
+        # Calculate average power from samples
+        power_values = []
+        if samples:
+            for timestamp, line in samples:
+                power = self._parse_power_line(line)
+                if power > 0:
+                    power_values.append(power)
         
-        return {
-            'duration_seconds': duration,
-            'avg_cpu_percent': avg_cpu,
-            'avg_memory_percent': avg_memory,
-            'estimated_power_watts': estimated_power_watts,
-            'estimated_power_mw': estimated_power_watts * 1000,
-            'iterations_completed': len(cpu_samples)
-        }
+        avg_power = sum(power_values) / len(power_values) if power_values else 0.0
+        
+        return avg_power, samples
     
-    def _estimate_power_from_cpu(self, cpu_percent: float, cpu_freq_mhz: float) -> float:
+    def measure_system_power(self) -> float:
         """
-        Estimate power consumption from CPU usage and frequency.
+        Measure current system power consumption in milliwatts.
+        
+        Returns:
+            Estimated power consumption in milliwatts
+        """
+        if self.use_powermetrics:
+            # Use powermetrics for accurate measurement
+            def dummy_task():
+                time.sleep(0.5)  # Short measurement window
+            
+            avg_power, _ = self._measure_with_powermetrics(dummy_task)
+            return avg_power
+        else:
+            # Fallback to psutil-based estimation
+            try:
+                # Get CPU usage over a short interval for more stable reading
+                cpu_percent = psutil.cpu_percent(interval=0.5)
+                
+                # Get CPU frequency
+                cpu_freq = psutil.cpu_freq()
+                cpu_freq_ghz = cpu_freq.current / 1000.0 if cpu_freq else 2.5  # Default 2.5GHz
+                
+                # Get memory usage
+                memory = psutil.virtual_memory()
+                memory_percent = memory.percent
+                
+                # More realistic power estimation based on typical laptop/desktop power profiles
+                # Base power: idle system (CPU, memory, storage, display)
+                base_power_watts = 15.0  # More realistic base power
+                
+                # CPU power: TDP-based estimation (more conservative)
+                # Typical laptop CPU TDP: 15-45W, desktop: 65-150W
+                max_cpu_power_watts = 45.0  # Conservative estimate for laptop CPU
+                cpu_power_watts = (cpu_percent / 100.0) * max_cpu_power_watts
+                
+                # Memory power: DDR4/DDR5 typically uses 2-5W per 8GB
+                memory_gb = memory.total / (1024**3)
+                memory_power_watts = (memory_percent / 100.0) * memory_gb * 0.3  # 0.3W per GB at full load
+                
+                total_power_watts = base_power_watts + cpu_power_watts + memory_power_watts
+                total_power_mw = total_power_watts * 1000.0
+                
+                # Clamp to reasonable bounds (10W - 150W)
+                total_power_mw = max(10000.0, min(150000.0, total_power_mw))
+                
+                return total_power_mw
+                
+            except Exception as e:
+                self.logger.error(f"Power measurement failed: {e}")
+                return 25000.0  # Default 25W estimate (more realistic)
+    
+    def benchmark_model_power(self, model_name: str, model_version: str, 
+                            image_path: str, iterations: int = 50) -> Dict:
+        """
+        Benchmark power consumption for a specific model.
         
         Args:
-            cpu_percent: CPU usage percentage
-            cpu_freq_mhz: CPU frequency in MHz
+            model_name: Name of the model (e.g., "YOLOv10")
+            model_version: Model version (e.g., "N", "S", "M", "B", "L", "X")
+            image_path: Path to test image
+            iterations: Number of inference iterations
             
         Returns:
-            Estimated power consumption in watts
+            Dictionary with power profiling results
         """
-        # Simplified power model
-        # Base power + dynamic power based on CPU usage and frequency
-        base_power_watts = 15.0  # Base system power
-        cpu_power_watts = (cpu_percent / 100.0) * (cpu_freq_mhz / 1000.0) * 0.5
+        from .yolo_model import YOLOModel
         
-        return base_power_watts + cpu_power_watts
-    
-    def get_system_info(self) -> Dict:
-        """Get current system information."""
-        cpu_freq = psutil.cpu_freq()
-        memory = psutil.virtual_memory()
+        self.logger.info(f"Benchmarking {model_name} v{model_version} power consumption")
         
-        return {
-            'cpu_count': psutil.cpu_count(),
-            'cpu_freq_current': cpu_freq.current if cpu_freq else 0,
-            'cpu_freq_min': cpu_freq.min if cpu_freq else 0,
-            'cpu_freq_max': cpu_freq.max if cpu_freq else 0,
-            'memory_total_gb': memory.total / (1024**3),
-            'memory_available_gb': memory.available / (1024**3),
-            'battery_info': self.battery_info
+        # Create model instance
+        model = YOLOModel(model_name, model_version)
+        
+        # Take baseline measurements
+        if self.use_powermetrics:
+            def baseline_task():
+                time.sleep(1.0)
+            baseline_power, _ = self._measure_with_powermetrics(baseline_task)
+        else:
+            baseline_measurements = []
+            for _ in range(3):
+                baseline_measurements.append(self.measure_system_power())
+                time.sleep(0.5)
+            baseline_power = sum(baseline_measurements) / len(baseline_measurements)
+        
+        time.sleep(1)  # Let system stabilize
+        
+        # Load model
+        model.load_model()
+        
+        # Measure idle power
+        if self.use_powermetrics:
+            def idle_task():
+                time.sleep(1.0)
+            idle_power, _ = self._measure_with_powermetrics(idle_task)
+        else:
+            idle_measurements = []
+            for _ in range(3):
+                idle_measurements.append(self.measure_system_power())
+                time.sleep(0.5)
+            idle_power = sum(idle_measurements) / len(idle_measurements)
+        
+        # Run inference benchmark
+        start_time = time.time()
+        inference_powers = []
+        successful_inferences = 0
+        
+        for i in range(iterations):
+            if self.use_powermetrics:
+                # Use powermetrics for each inference
+                def inference_task():
+                    return model.run_inference(image_path)
+                
+                avg_power, samples = self._measure_with_powermetrics(inference_task)
+                # Need to actually run inference to get result
+                success, detections = model.run_inference(image_path)
+                inference_powers.append(avg_power)
+            else:
+                # Fallback to psutil method
+                pre_inference_power = self.measure_system_power()
+                success, detections = model.run_inference(image_path)
+                post_inference_power = self.measure_system_power()
+                avg_inference_power = (pre_inference_power + post_inference_power) / 2.0
+                inference_powers.append(avg_inference_power)
+            
+            if success:
+                successful_inferences += 1
+            else:
+                self.logger.error(f"Inference failed on iteration {i+1}")
+            
+            # Progress indicator for long runs
+            if (i + 1) % 10 == 0:
+                self.logger.info(f"Completed {i + 1}/{iterations} iterations for {model_name} v{model_version}")
+            
+            # Small delay between iterations
+            time.sleep(0.05)
+        
+        end_time = time.time()
+        total_duration = end_time - start_time
+        
+        # Calculate statistics with outlier removal for more stable results
+        sorted_powers = sorted(inference_powers)
+        # Remove top and bottom 10% as outliers for high iteration counts
+        if iterations >= 20:
+            trim_count = max(1, iterations // 10)
+            trimmed_powers = sorted_powers[trim_count:-trim_count]
+        else:
+            trimmed_powers = sorted_powers
+        
+        avg_inference_power = sum(trimmed_powers) / len(trimmed_powers)
+        max_inference_power = max(trimmed_powers)
+        min_inference_power = min(trimmed_powers)
+        
+        # Calculate model-specific power (difference from idle)
+        model_power_mw = max(0, avg_inference_power - idle_power)  # Ensure non-negative
+        
+        # Calculate energy per inference using actual inference time (not total duration)
+        avg_inference_time_seconds = total_duration / iterations
+        energy_per_inference_mwh = (model_power_mw * avg_inference_time_seconds) / 3600.0
+        
+        profile = {
+            'model_name': model_name,
+            'model_version': model_version,
+            'baseline_power_mw': baseline_power,
+            'idle_power_mw': idle_power,
+            'avg_inference_power_mw': avg_inference_power,
+            'max_inference_power_mw': max_inference_power,
+            'min_inference_power_mw': min_inference_power,
+            'model_power_mw': model_power_mw,
+            'energy_per_inference_mwh': energy_per_inference_mwh,
+            'iterations': iterations,
+            'total_duration_seconds': total_duration,
+            'avg_inference_time_seconds': avg_inference_time_seconds,
+            'success_rate': successful_inferences / iterations,
+            'outliers_removed': iterations - len(trimmed_powers) if iterations >= 20 else 0,
+            'measurement_method': 'powermetrics' if self.use_powermetrics else 'psutil'
         }
+        
+        # Store profile
+        profile_key = f"{model_name}_{model_version}"
+        self.power_profiles[profile_key] = profile
+        
+        self.logger.info(f"Power benchmark complete for {profile_key}: {model_power_mw:.2f} mW ({profile['measurement_method']})")
+        
+        return profile
+    
+    def benchmark_all_models(self, image_path: str, iterations: int = 50) -> Dict[str, Dict]:
+        """
+        Benchmark all YOLOv10 models.
+        
+        Args:
+            image_path: Path to test image
+            iterations: Number of iterations per model
+            
+        Returns:
+            Dictionary of all model profiles
+        """
+        models = [
+            ("YOLOv10", "N"),
+            ("YOLOv10", "S"),
+            ("YOLOv10", "M"),
+            ("YOLOv10", "B"),
+            ("YOLOv10", "L"),
+            ("YOLOv10", "X")
+        ]
+        
+        for model_name, model_version in models:
+            try:
+                self.benchmark_model_power(model_name, model_version, image_path, iterations)
+            except Exception as e:
+                self.logger.error(f"Failed to benchmark {model_name} v{model_version}: {e}")
+        
+        self.save_profiles()
+        return self.power_profiles
+    
+    def save_profiles(self):
+        """Save power profiles to file."""
+        try:
+            self.profiles_file.parent.mkdir(exist_ok=True)
+            with open(self.profiles_file, 'w') as f:
+                json.dump(self.power_profiles, f, indent=2)
+            self.logger.info(f"Power profiles saved to {self.profiles_file}")
+        except Exception as e:
+            self.logger.error(f"Failed to save profiles: {e}")
+    
+    def load_profiles(self) -> Dict[str, Dict]:
+        """Load power profiles from file."""
+        try:
+            if self.profiles_file.exists():
+                with open(self.profiles_file, 'r') as f:
+                    self.power_profiles = json.load(f)
+                self.logger.info(f"Loaded {len(self.power_profiles)} power profiles")
+            else:
+                self.logger.info("No existing power profiles found")
+        except Exception as e:
+            self.logger.error(f"Failed to load profiles: {e}")
+        
+        return self.power_profiles
+    
+    def get_model_power(self, model_name: str, model_version: str) -> float:
+        """
+        Get power consumption for a specific model.
+        
+        Args:
+            model_name: Name of the model
+            model_version: Model version
+            
+        Returns:
+            Power consumption in milliwatts
+        """
+        profile_key = f"{model_name}_{model_version}"
+        if profile_key in self.power_profiles:
+            return self.power_profiles[profile_key]['model_power_mw']
+        
+        # Default estimate if not found (based on typical YOLO model power consumption)
+        self.logger.warning(f"No power profile found for {profile_key}, using estimate")
+        version_power_map = {"N": 2000, "S": 3500, "M": 6000, "B": 8000, "L": 12000, "X": 18000}
+        return version_power_map.get(model_version, 5000)

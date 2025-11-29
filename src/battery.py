@@ -9,14 +9,17 @@ class Battery:
         self.charge_rate_watts = charge_rate_watts
         self.current_level_mah = capacity_mah  # Start fully charged
         self.logger = logging.getLogger(__name__)
+        self.total_energy_used_mwh = 0.0
+        self.total_clean_energy_used_mwh = 0.0
     
-    def discharge(self, power_mw: float, duration_seconds: float) -> bool:
+    def discharge(self, power_mw: float, duration_seconds: float, clean_energy_percentage: float = 0.0) -> bool:
         """
         Discharge battery by specified power for duration.
         
         Args:
             power_mw: Power consumption in milliwatts
             duration_seconds: Duration in seconds
+            clean_energy_percentage: Percentage of energy from clean sources (0-100)
             
         Returns:
             True if discharge successful, False if insufficient battery
@@ -29,6 +32,8 @@ class Battery:
             return False
         
         self.current_level_mah -= energy_mah
+        self.total_energy_used_mwh += energy_mwh
+        self.total_clean_energy_used_mwh += energy_mwh * (clean_energy_percentage / 100.0)
         return True
     
     def charge(self, duration_seconds: float) -> float:
@@ -57,3 +62,16 @@ class Battery:
     def get_level_mah(self) -> float:
         """Get current battery level in mAh."""
         return self.current_level_mah
+    
+    def get_total_energy_used_mwh(self) -> float:
+        """Get total energy used in mWh."""
+        return self.total_energy_used_mwh
+    
+    def get_total_clean_energy_used_mwh(self) -> float:
+        """Get total clean energy used in mWh."""
+        return self.total_clean_energy_used_mwh
+    
+    def reset_energy_tracking(self):
+        """Reset energy usage tracking."""
+        self.total_energy_used_mwh = 0.0
+        self.total_clean_energy_used_mwh = 0.0

@@ -16,14 +16,14 @@
 ## Phase 2: Power Benchmarking
 
 ### 1. Power Measurement System
-- [ ] Implement psutil-based CPU power monitoring (cpu_percent, battery sensors)
-- [ ] Create benchmark suite for each YOLOv10 model (N,S,M,B,L,X)
-- [ ] Run models on benchmark images, measure power consumption
-- [ ] Store power profiles for 4000 mAh battery simulation
+- [X] Implement psutil-based CPU power monitoring (cpu_percent, battery sensors)
+- [X] Create benchmark suite for each YOLOv10 model (N,S,M,B,L,X)
+- [X] Run models on benchmark images, measure power consumption
+- [X] Store power profiles for 4000 mAh battery simulation
 
 ### 2. Battery Simulation
-- [ ] Implement realistic battery behavior with 100W USB-C charging
-- [ ] Validate power consumption models
+- [X] Implement realistic battery behavior with 100W USB-C charging
+- [X] Validate power consumption models
 
 ## Phase 3: Controller Implementation
 
@@ -33,9 +33,14 @@
 - [ ] OracleController: PuLP MILP solver using future knowledge
 
 ### 2. Custom Controller Training
+- [ ] Uses MIPS solver on existing data to get the correct results on when to charge / switch models, which is then filtered into training, validation, and test data for our algorithm. To avoid subsequent MIPS solving, try and reuse this data as much as possible by 'caching' it as .json or .csv files that can be later called upon.
 - [ ] Gradient descent with loss: α * (1 - accuracy) + β * latency + γ * non-clean-energy-usage
 - [ ] Optimize weights for accuracy, latency, clean energy factors
-- [ ] Implement CustomController with trained weights
+- [ ] Implement CustomController that utilizes trained weights
+
+### 3. Desired Functionality
+- [ ] A python file exists, such that running it would solve the MIPS problem and output the results to a json file as training data for the step below this.
+- [ ] A python file separate from the above-mentioned python file exists, such that running it would train the model from scratch and save the weights to a json file.
 
 ## Phase 4: Simulation Engine
 
