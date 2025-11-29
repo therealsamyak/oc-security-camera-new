@@ -41,3 +41,7 @@ uv.lock
 *.pt
 *.pth
 *.ckpt
+
+# Logging
+logs/
+*.log
