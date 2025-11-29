@@ -7,8 +7,8 @@ import sys
 import logging
 from pathlib import Path
 
-from power_profiler import PowerProfiler
-from logging_config import setup_logging
+from src.power_profiler import PowerProfiler
+from src.logging_config import setup_logging
 
 
 def main():
@@ -38,7 +38,7 @@ def main():
     # Benchmark all models on both images
     for image_path in [image1, image2]:
         logger.info(f"Benchmarking models on {image_path}")
-        profiles = profiler.benchmark_all_models(str(image_path), iterations=100)
+        profiles = profiler.benchmark_all_models(str(image_path), iterations=1)
 
         # Print results
         print(f"\nPower Benchmark Results for {image_path.name}:")
