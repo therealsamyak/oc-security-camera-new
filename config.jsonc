@@ -2,7 +2,9 @@
   "simulation": {
     "duration_days": 7,
     "task_interval_seconds": 5,
-    "time_acceleration": 1
+    "time_acceleration": 1,
+    "user_accuracy_requirement": 45.0,
+    "user_latency_requirement": 8.0
   },
   "battery": {
     "capacity_wh": 5.0,
