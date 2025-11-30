@@ -233,7 +233,7 @@ class CustomController:
         self,
         training_data: List[Dict],
         available_models: Dict[str, Dict[str, float]],
-        epochs: int = 100,
+        epochs: int = 10000,
         learning_rate: float = 0.01,
     ):
         """Train CustomController with train/validation/test split."""
@@ -243,7 +243,7 @@ class CustomController:
         train_data, val_data, test_data = self.split_data(training_data)
 
         best_val_loss = float("inf")
-        patience = 10
+        patience = 50
         patience_counter = 0
         best_weights = None
         final_epoch = 0
@@ -403,7 +403,7 @@ def main():
 
     print("Starting training...")
     evaluation_stats = controller.train(
-        training_data, available_models, epochs=100, learning_rate=0.01
+        training_data, available_models, epochs=10000, learning_rate=0.01
     )
 
     print("Saving trained weights...")
