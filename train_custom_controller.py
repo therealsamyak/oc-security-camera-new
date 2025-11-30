@@ -167,6 +167,70 @@ class CustomController:
 
         return loss
 
+    def split_data(
+        self, data: List[Dict], train_ratio: float = 0.7, val_ratio: float = 0.2
+    ) -> Tuple[List[Dict], List[Dict], List[Dict]]:
+        """Split data into train/validation/test sets."""
+        # Convert to indices for shuffling
+        indices = list(range(len(data)))
+        np.random.shuffle(indices)
+
+        n = len(data)
+        train_end = int(n * train_ratio)
+        val_end = int(n * (train_ratio + val_ratio))
+
+        train_indices = indices[:train_end]
+        val_indices = indices[train_end:val_end]
+        test_indices = indices[val_end:]
+
+        train_data = [data[i] for i in train_indices]
+        val_data = [data[i] for i in val_indices]
+        test_data = [data[i] for i in test_indices]
+
+        print(
+            f"Data split: Train={len(train_data)}, Val={len(val_data)}, Test={len(test_data)}"
+        )
+        return train_data, val_data, test_data
+
+    def evaluate(
+        self, data: List[Dict], available_models: Dict[str, Dict[str, float]]
+    ) -> Dict[str, float]:
+        """Evaluate model on validation/test data."""
+        total_loss = 0.0
+        model_correct = 0
+        charge_correct = 0
+
+        for scenario in data:
+            features = self.extract_features(scenario)
+            target_model = scenario["optimal_model"]
+            target_charge = scenario["should_charge"]
+
+            # Forward pass
+            prediction = self.predict_model_and_charge(
+                features, list(available_models.keys()), available_models
+            )
+
+            # Compute loss
+            loss = self.compute_loss(
+                prediction, (target_model, target_charge), features, available_models
+            )
+            total_loss += loss
+
+            # Track accuracy
+            pred_model, pred_charge = prediction
+            if pred_model == target_model:
+                model_correct += 1
+            if pred_charge == target_charge:
+                charge_correct += 1
+
+        n = len(data)
+        return {
+            "loss": total_loss / n,
+            "model_accuracy": model_correct / n,
+            "charge_accuracy": charge_correct / n,
+            "overall_accuracy": (model_correct + charge_correct) / (2 * n),
+        }
+
     def train(
         self,
         training_data: List[Dict],
@@ -174,20 +238,75 @@ class CustomController:
         epochs: int = 100,
         learning_rate: float = 0.01,
     ):
-        """Train the CustomController on training data."""
+        """Train CustomController with train/validation/test split."""
         print(f"Training CustomController for {epochs} epochs...")
 
-        for epoch in range(epochs):
-            total_loss = 0.0
+        # Split data
+        train_data, val_data, test_data = self.split_data(training_data)
 
-            for scenario in training_data:
+        best_val_loss = float("inf")
+        patience = 10
+        patience_counter = 0
+        best_weights = None
+
+        for epoch in range(epochs):
+            # Training phase
+            total_loss = 0.0
+            # Shuffle training data using indices
+            train_indices = list(range(len(train_data)))
+            np.random.shuffle(train_indices)
+            shuffled_train_data = [train_data[i] for i in train_indices]
+
+            for scenario in shuffled_train_data:
                 loss = self.train_step(scenario, available_models, learning_rate)
                 total_loss += loss
 
-            avg_loss = total_loss / len(training_data)
+            train_loss = total_loss / len(train_data)
+
+            # Validation phase
+            val_metrics = self.evaluate(val_data, available_models)
+
+            # Early stopping
+            if val_metrics["loss"] < best_val_loss:
+                best_val_loss = val_metrics["loss"]
+                patience_counter = 0
+                # Save best weights
+                best_weights = {
+                    "model_weights": {
+                        k: v.copy() for k, v in self.model_weights.items()
+                    },
+                    "charge_threshold": self.charge_threshold,
+                }
+            else:
+                patience_counter += 1
 
             if epoch % 10 == 0:
-                print(f"Epoch {epoch}: Average Loss = {avg_loss:.4f}")
+                print(
+                    f"Epoch {epoch}: Train Loss={train_loss:.4f}, Val Loss={val_metrics['loss']:.4f}"
+                )
+                print(
+                    f"  Val Acc: Model={val_metrics['model_accuracy']:.3f}, Charge={val_metrics['charge_accuracy']:.3f}"
+                )
+
+            # Early stopping
+            if patience_counter >= patience:
+                print(f"Early stopping at epoch {epoch}")
+                break
+
+        # Restore best weights
+        if best_weights:
+            self.model_weights = best_weights["model_weights"]
+            self.charge_threshold = best_weights["charge_threshold"]
+
+        # Final evaluation on test set
+        print("\n📊 Final Evaluation:")
+        test_metrics = self.evaluate(test_data, available_models)
+        print(f"Test Loss: {test_metrics['loss']:.4f}")
+        print(f"Test Model Accuracy: {test_metrics['model_accuracy']:.3f}")
+        print(f"Test Charge Accuracy: {test_metrics['charge_accuracy']:.3f}")
+        print(f"Test Overall Accuracy: {test_metrics['overall_accuracy']:.3f}")
+
+        return test_metrics
 
     def save_weights(self, filepath: str):
         """Save trained weights to JSON file."""
