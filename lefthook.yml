@@ -12,6 +12,7 @@ pre-commit:
 
     json-md-yml-format:
       glob: "**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue,json,css,yml,yaml}"
+      exclude: "results/**/*"
       run: |
         if command -v npx >/dev/null 2>&1; then
           npx --yes prettier --write {staged_files}
