@@ -136,7 +136,7 @@ def main():
     training_data = []
 
     for i, (battery, clean_energy, acc_req, lat_req) in enumerate(scenarios):
-        if i % 5000 == 0:
+        if i % 1000 == 0:
             print(f"Progress: {i}/{len(scenarios)}")
 
         try:
