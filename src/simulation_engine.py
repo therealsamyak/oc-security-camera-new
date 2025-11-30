@@ -8,6 +8,7 @@ from datetime import datetime
 from .battery import Battery
 from .controller import Controller
 from .energy_data import EnergyData
+from .config_loader import SimulationConfig
 
 
 @dataclass
@@ -24,39 +25,19 @@ class Task:
     missed_deadline: bool = False
 
 
-@dataclass
-class SimulationConfig:
-    """Configuration for simulation parameters."""
-
-    duration_days: int = 7
-    task_interval_seconds: int = 5
-    time_acceleration: int = 1
-    battery_capacity_wh: float = 5.0
-    charge_rate_watts: float = 100.0
-    locations: Optional[List[str]] = None
-    seasons: Optional[List[str]] = None
-
-    def __post_init__(self):
-        if self.locations is None:
-            self.locations = ["CA", "FL", "NW", "NY"]
-        if self.seasons is None:
-            self.seasons = ["winter", "spring", "summer", "fall"]
-
-
 class TaskGenerator:
     """Generates realistic security camera workload."""
 
     def __init__(self, seed: Optional[int] = None):
         self.rng = random.Random(seed)
 
-    def generate_task(self, timestamp: float) -> Optional[Task]:
-        """Generate a single task with random requirements."""
+    def generate_task(
+        self, timestamp: float, accuracy_req: float, latency_req: float
+    ) -> Optional[Task]:
+        """Generate a single task with fixed requirements."""
         # Security cameras have periodic activity with some randomness
         if self.rng.random() < 0.1:  # 10% chance of no task
             return None
-
-        accuracy_req = self.rng.uniform(35.0, 55.0)  # Match actual model capabilities
-        latency_req = self.rng.uniform(1.0, 15.0)  # Match actual model latencies (ms)
 
         return Task(
             timestamp=timestamp,
@@ -331,7 +312,11 @@ class SimulationEngine:
             self.current_time = timestamp
 
             # Generate task
-            task = self.task_generator.generate_task(timestamp)
+            task = self.task_generator.generate_task(
+                timestamp,
+                self.config.user_accuracy_requirement,
+                self.config.user_latency_requirement,
+            )
             if task is not None:
                 self.tasks.append(task)
                 self.metrics["total_tasks"] += 1

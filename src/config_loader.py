@@ -12,6 +12,8 @@ class SimulationConfig:
         duration_days: int = 7,
         task_interval_seconds: int = 5,
         time_acceleration: int = 1,
+        user_accuracy_requirement: float = 45.0,
+        user_latency_requirement: float = 8.0,
         battery_capacity_wh: float = 5.0,
         charge_rate_watts: float = 100.0,
         locations: Optional[List[str]] = None,
@@ -20,6 +22,8 @@ class SimulationConfig:
         self.duration_days = duration_days
         self.task_interval_seconds = task_interval_seconds
         self.time_acceleration = time_acceleration
+        self.user_accuracy_requirement = user_accuracy_requirement
+        self.user_latency_requirement = user_latency_requirement
         self.battery_capacity_wh = battery_capacity_wh
         self.charge_rate_watts = charge_rate_watts
         self.locations = locations or ["CA", "FL", "NW", "NY"]
@@ -55,6 +59,8 @@ class ConfigLoader:
                 "duration_days": 7,
                 "task_interval_seconds": 5,
                 "time_acceleration": 1,
+                "user_accuracy_requirement": 45.0,
+                "user_latency_requirement": 8.0,
             },
             "battery": {"capacity_wh": 5.0, "charge_rate_watts": 100},
             "locations": ["CA", "FL", "NW", "NY"],
@@ -72,6 +78,8 @@ class ConfigLoader:
             duration_days=sim_config.get("duration_days", 7),
             task_interval_seconds=sim_config.get("task_interval_seconds", 5),
             time_acceleration=sim_config.get("time_acceleration", 1),
+            user_accuracy_requirement=sim_config.get("user_accuracy_requirement", 45.0),
+            user_latency_requirement=sim_config.get("user_latency_requirement", 8.0),
             battery_capacity_wh=battery_config.get("capacity_wh", 5.0),
             charge_rate_watts=battery_config.get("charge_rate_watts", 100),
             locations=self.config.get("locations", ["CA", "FL", "NW", "NY"]),
