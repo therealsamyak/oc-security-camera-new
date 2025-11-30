@@ -9,6 +9,7 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from train_custom_controller import CustomController
+from generate_training_data import load_power_profiles, generate_training_scenarios
 
 
 def test_data_splitting():
@@ -89,10 +90,48 @@ def test_evaluation():
     return metrics
 
 
+def test_load_power_profiles():
+    """Test loading power profiles."""
+    print("Testing load_power_profiles...")
+    models = load_power_profiles()
+
+    assert len(models) > 0, "No models loaded"
+    assert "YOLOv10_N" in models, "YOLOv10_N not found"
+
+    for model_name, data in models.items():
+        assert "accuracy" in data, f"Missing accuracy for {model_name}"
+        assert "latency" in data, f"Missing latency for {model_name}"
+        assert "power_cost" in data, f"Missing power_cost for {model_name}"
+
+    print(f"✓ Loaded {len(models)} models successfully")
+    return models
+
+
+def test_generate_training_scenarios():
+    """Test scenario generation."""
+    print("Testing generate_training_scenarios...")
+    scenarios = generate_training_scenarios()
+
+    assert len(scenarios) > 0, "No scenarios generated"
+    assert len(scenarios) <= 150000, "Too many scenarios generated"
+
+    # Check first scenario
+    battery, clean_energy, acc_req, lat_req = scenarios[0]
+    assert 5 <= battery <= 100, f"Invalid battery level: {battery}"
+    assert 0 <= clean_energy <= 100, f"Invalid clean energy: {clean_energy}"
+    assert 0.2 <= acc_req <= 1.0, f"Invalid accuracy requirement: {acc_req}"
+    assert 1 <= lat_req <= 30, f"Invalid latency requirement: {lat_req}"
+
+    print(f"✓ Generated {len(scenarios)} scenarios successfully")
+    return scenarios
+
+
 def main():
     """Run splitting tests."""
     print("🧪 Testing Train/Val/Test Splitting...")
 
+    test_load_power_profiles()
+    test_generate_training_scenarios()
     train_data, val_data, test_data = test_data_splitting()
     test_evaluation()
 
