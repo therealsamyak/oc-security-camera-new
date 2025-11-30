@@ -254,7 +254,9 @@ class PowerProfiler:
         time.sleep(1)  # Let system stabilize
 
         # Load model
+        self.logger.info(f"Loading {model_name} v{model_version} model...")
         model.load_model()
+        self.logger.info(f"Model {model_name} v{model_version} loaded successfully")
 
         # Measure idle power using powermetrics
         def idle_task():
@@ -266,6 +268,10 @@ class PowerProfiler:
         start_time = time.time()
         inference_powers = []
         successful_inferences = 0
+
+        self.logger.info(
+            f"Starting {iterations} inference iterations for {model_name} v{model_version} on {image_path}"
+        )
 
         for i in range(iterations):
             # Use powermetrics for each inference
@@ -284,7 +290,7 @@ class PowerProfiler:
 
             # Progress indicator for each iteration
             self.logger.info(
-                f"Iteration {i + 1}/{iterations} for {model_name} v{model_version}"
+                f"[{model_name} v{model_version}] Iteration {i + 1}/{iterations} - Power: {avg_power:.2f} mW"
             )
 
             # Longer delay between iterations for system stabilization

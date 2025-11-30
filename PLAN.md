@@ -45,7 +45,7 @@
   - Accuracy requirements: 70-95% (step 5%)
   - Latency requirements: 1000-3000ms (step 250ms)
   - Target: 10,000 training samples
-- [x] Cache MIPS results to JSON file for reuse
+- [ ] Cache MIPS results to JSON file for reuse
 - [x] Gradient descent training with dual outputs (model selection + charging decision):
   - Loss: α _ (1 - accuracy) + β _ latency + γ \* non-clean-energy-usage
   - Initial weights: α=0.5, β=0.3, γ=0.2

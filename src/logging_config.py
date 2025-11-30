@@ -9,11 +9,11 @@ def setup_logging():
     log_dir.mkdir(exist_ok=True)
 
     logging.basicConfig(
-        level=logging.ERROR,
+        level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[
             logging.FileHandler(log_dir / "error.log"),
-            logging.StreamHandler(sys.stderr),
+            logging.StreamHandler(sys.stdout),
         ],
     )
 

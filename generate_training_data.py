@@ -12,16 +12,33 @@ import numpy as np
 
 
 def load_power_profiles() -> Dict[str, Dict[str, float]]:
-    """Load power profiles from results."""
+    """Load power profiles from results and model data from CSV."""
     with open("results/power_profiles.json", "r") as f:
         profiles = json.load(f)
+    
+    # Load real model data
+    model_data = {}
+    with open("model-data/model-data.csv", "r") as f:
+        lines = f.readlines()
+        for line in lines[1:]:  # Skip header
+            parts = line.strip().split(',')
+            model = parts[0]
+            version = parts[1]
+            latency = float(parts[2])
+            accuracy = float(parts[3])
+            model_data[f"{model}_{version}"] = {
+                "accuracy": accuracy,
+                "latency": latency
+            }
 
     models = {}
     for model_name, data in profiles.items():
+        # Use real accuracy and latency from model-data.csv
+        real_data = model_data.get(model_name, {})
         models[model_name] = {
-            "accuracy": 85.0 + np.random.uniform(-5, 5),  # Mock accuracy
-            "latency": data["avg_inference_time_seconds"] * 1000,  # Convert to ms
-            "power_cost": data["model_power_mw"],
+            "accuracy": real_data.get("accuracy", 85.0),  # Fallback to 85% if not found
+            "latency": real_data.get("latency", data["avg_inference_time_seconds"] * 1000),  # Use real latency, fallback to power profile
+            "power_cost": data["model_power_mw"],  # Keep power data from power profiling
         }
 
     return models
