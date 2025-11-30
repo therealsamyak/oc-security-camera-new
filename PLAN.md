@@ -63,6 +63,7 @@
 - [ ] 7-day simulation with 5-second task intervals
 - [ ] Clean energy data integration (5-minute updates)
 - [ ] 4 weeks (seasonal), 4 locations support
+- [ ] Configurable from a `config.jsonc` file 
 
 ### 2. Metrics Collection
 
