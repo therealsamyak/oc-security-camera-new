@@ -6,8 +6,7 @@ Generates optimal decisions for diverse scenarios and caches to JSON.
 
 import json
 import pulp
-import itertools
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import numpy as np
 
 
@@ -106,30 +105,23 @@ def solve_mips_scenario(
     return selected_model, should_charge
 
 
-def generate_training_scenarios() -> List[Tuple[int, int, float, int]]:
-    """Generate diverse training scenarios."""
-    battery_levels = list(range(5, 101, 5))  # 5% to 100%
-    clean_energy_levels = list(range(0, 101, 10))  # 0% to 100%
-    accuracy_requirements = [
-        i / 100 for i in range(30, 101, 5)
-    ]  # 0.3 to 1.0 (step 0.05 - more variety)
-    latency_requirements = [1, 2, 3, 5, 8, 10, 15, 20]  # 1ms to 20ms (realistic range)
+def generate_training_scenarios(
+    seed: Optional[int] = None,
+) -> List[Tuple[int, int, float, int]]:
+    """Generate purely random training scenarios with optional seed."""
+    if seed is not None:
+        np.random.seed(seed)
 
-    all_combinations = list(
-        itertools.product(
-            battery_levels,
-            clean_energy_levels,
-            accuracy_requirements,
-            latency_requirements,
-        )
-    )
+    # Generate 75,000 purely random scenarios
+    scenarios = []
+    for _ in range(75000):
+        battery = np.random.uniform(1, 100)
+        clean_energy = np.random.uniform(0, 100)
+        acc_req = np.random.uniform(0.2, 1.0)
+        lat_req = np.random.choice([1, 2, 3, 5, 8, 10, 15, 20, 25, 30])
+        scenarios.append((battery, clean_energy, acc_req, lat_req))
 
-    # Sample 20,000 combinations if too many
-    if len(all_combinations) > 20000:
-        np.random.shuffle(all_combinations)
-        all_combinations = all_combinations[:20000]
-
-    return all_combinations
+    return scenarios
 
 
 def main():
@@ -154,12 +146,12 @@ def main():
 
             training_data.append(
                 {
-                    "battery_level": battery,
-                    "clean_energy_percentage": clean_energy,
-                    "accuracy_requirement": acc_req,
-                    "latency_requirement": lat_req,
+                    "battery_level": int(battery),
+                    "clean_energy_percentage": int(clean_energy),
+                    "accuracy_requirement": float(acc_req),
+                    "latency_requirement": int(lat_req),
                     "optimal_model": selected_model,
-                    "should_charge": should_charge,
+                    "should_charge": bool(should_charge),
                 }
             )
         except Exception as e:

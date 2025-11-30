@@ -33,14 +33,14 @@ def test_generate_training_scenarios():
     scenarios = generate_training_scenarios()
 
     assert len(scenarios) > 0, "No scenarios generated"
-    assert len(scenarios) <= 10000, "Too many scenarios generated"
+    assert len(scenarios) <= 60000, "Too many scenarios generated"
 
     # Check first scenario
     battery, clean_energy, acc_req, lat_req = scenarios[0]
     assert 5 <= battery <= 100, f"Invalid battery level: {battery}"
     assert 0 <= clean_energy <= 100, f"Invalid clean energy: {clean_energy}"
-    assert 70 <= acc_req <= 95, f"Invalid accuracy requirement: {acc_req}"
-    assert 1000 <= lat_req <= 3000, f"Invalid latency requirement: {lat_req}"
+    assert 0.2 <= acc_req <= 1.0, f"Invalid accuracy requirement: {acc_req}"
+    assert 1 <= lat_req <= 30, f"Invalid latency requirement: {lat_req}"
 
     print(f"✓ Generated {len(scenarios)} scenarios successfully")
     return scenarios
