@@ -158,25 +158,30 @@ class CustomController(Controller):
             "clean_energy_weight": 0.2,
         }
         self.model_weights = {}
-        self.charge_threshold = 0.5
+        self.charge_weights = None
+        self.charge_threshold = 0.0
         self.load_weights(weights_file)
 
     def load_weights(self, filepath: str):
         """Load trained weights from JSON file."""
-        try:
-            import json
+        import json
 
-            with open(filepath, "r") as f:
-                weights_data = json.load(f)
+        with open(filepath, "r") as f:
+            weights_data = json.load(f)
 
-            self.weights = weights_data["weights"]
-            self.model_weights = {
-                k: list(v) for k, v in weights_data["model_weights"].items()
-            }
-            self.charge_threshold = weights_data["charge_threshold"]
-        except FileNotFoundError:
-            # Use default weights if file not found
-            pass
+        if "weights" not in weights_data:
+            raise ValueError(f"Missing 'weights' in {filepath}")
+        if "model_weights" not in weights_data:
+            raise ValueError(f"Missing 'model_weights' in {filepath}")
+        if "charge_threshold" not in weights_data:
+            raise ValueError(f"Missing 'charge_threshold' in {filepath}")
+
+        self.weights = weights_data["weights"]
+        self.model_weights = {
+            k: list(v) for k, v in weights_data["model_weights"].items()
+        }
+        self.charge_weights = weights_data.get("charge_weights")
+        self.charge_threshold = weights_data["charge_threshold"]
 
     def select_model(
         self,
@@ -194,20 +199,24 @@ class CustomController(Controller):
             user_latency_requirement / 3000.0,
         ]
 
-        # Calculate model scores
+        # Calculate model scores using trained weights
         model_scores = {}
         for model in available_models.keys():
             if model not in self.model_weights:
-                self.model_weights[model] = [0.25, 0.25, 0.25, 0.25]
+                raise ValueError(f"No trained weights found for model: {model}")
 
+            # Use trained model weights for scoring
             score = sum(f * w for f, w in zip(features, self.model_weights[model]))
             model_scores[model] = score
 
         selected_model = max(model_scores.keys(), key=lambda x: model_scores[x])
 
-        # Charging decision
-        charge_score = (features[0] < 0.2) * 0.7 + (features[1] > 0.8) * 0.3
-        should_charge = charge_score > self.charge_threshold
+        # Charging decision using trained weights
+        if self.charge_weights is None:
+            raise ValueError("No charge_weights found in trained model")
+
+        charge_score = sum(f * w for f, w in zip(features, self.charge_weights))
+        should_charge = charge_score > 0  # Use 0 as threshold like in training
 
         return ModelChoice(
             model_name=selected_model,
