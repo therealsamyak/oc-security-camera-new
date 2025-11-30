@@ -321,6 +321,7 @@ class CustomController:
         weights_data = {
             "weights": self.weights,
             "model_weights": {k: v.tolist() for k, v in self.model_weights.items()},
+            "charge_weights": self.charge_weights.tolist() if self.charge_weights is not None else None,
             "charge_threshold": self.charge_threshold,
         }
 
