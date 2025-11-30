@@ -8,9 +8,11 @@ import json
 import os
 import sys
 
-from src import (
-    SimulationEngine,
-    SimulationConfig,
+# Add parent directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.simulation_engine import SimulationEngine, SimulationConfig
+from src.controller import (
     NaiveWeakController,
     NaiveStrongController,
     OracleController,
@@ -32,17 +34,42 @@ def load_power_profiles():
 def test_controller(controller_class, controller_name, power_profiles, test_data=None):
     """Test a single controller."""
     print(f"\n🧪 Testing {controller_name}...")
+    print(f"   Controller class: {controller_class}")
 
     # Initialize controller
-    if controller_class == OracleController:
-        # Oracle needs future data - use dummy data for testing
-        controller = controller_class(future_energy_data={}, future_tasks=100)
-    elif controller_class == CustomController:
-        controller = controller_class("results/custom_controller_weights.json")
-    else:
-        controller = controller_class()
+    try:
+        if controller_class == OracleController:
+            # Oracle needs future data - use dummy data for testing
+            print("   Initializing OracleController with dummy future data...")
+            controller = controller_class(future_energy_data={}, future_tasks=100)
+        elif controller_class == CustomController:
+            weights_file = "results/custom_controller_weights.json"
+            print(
+                f"   Initializing CustomController with weights from {weights_file}..."
+            )
+            controller = controller_class(weights_file)
+            print("   CustomController loaded successfully")
+            print(
+                f"   Model weights keys: {list(controller.model_weights.keys()) if hasattr(controller, 'model_weights') else 'None'}"
+            )
+            print(
+                f"   Charge weights: {controller.charge_weights if hasattr(controller, 'charge_weights') else 'None'}"
+            )
+            print(
+                f"   Charge threshold: {controller.charge_threshold if hasattr(controller, 'charge_threshold') else 'None'}"
+            )
+        else:
+            print(f"   Initializing {controller_name}...")
+            controller = controller_class()
+    except Exception as e:
+        print(f"❌ {controller_name} initialization failed: {e}")
+        import traceback
+
+        traceback.print_exc()
+        return False
 
     # Configure simulation for 1 day
+    print("   Configuring simulation...")
     config = SimulationConfig(
         duration_days=1,
         task_interval_seconds=60,  # 1 minute intervals for faster testing
@@ -52,9 +79,13 @@ def test_controller(controller_class, controller_name, power_profiles, test_data
         locations=["CA"],  # Single location for testing
         seasons=["summer"],  # Single season for testing
     )
+    print(
+        f"   Simulation config: {config.duration_days} days, {config.task_interval_seconds}s intervals"
+    )
 
     # Run simulation
     try:
+        print("   Creating simulation engine...")
         engine = SimulationEngine(
             config=config,
             controller=controller,
@@ -63,8 +94,25 @@ def test_controller(controller_class, controller_name, power_profiles, test_data
             week=1,
             power_profiles=power_profiles,
         )
+        print("   Simulation engine created successfully")
+        print(f"   Battery capacity: {engine.battery.capacity_wh} Wh")
+        print(f"   Battery current level: {engine.battery.get_percentage():.1f}%")
+        print(f"   Available models: {list(engine.power_profiles.keys())}")
 
+        print("   Starting simulation run...")
         metrics = engine.run()
+        print("   Simulation completed")
+
+        # Detailed metrics logging
+        print(f"   📊 Raw metrics keys: {list(metrics.keys())}")
+        print(f"   📊 Total tasks: {metrics.get('total_tasks', 'N/A')}")
+        print(f"   📊 Completed tasks: {metrics.get('completed_tasks', 'N/A')}")
+        print(f"   📊 Missed deadlines: {metrics.get('missed_deadlines', 'N/A')}")
+        print(f"   📊 Total energy (Wh): {metrics.get('total_energy_wh', 'N/A')}")
+        print(f"   📊 Clean energy (Wh): {metrics.get('clean_energy_wh', 'N/A')}")
+        print(f"   📊 Clean energy %: {metrics.get('clean_energy_percentage', 'N/A')}")
+        print(f"   📊 Model selections: {metrics.get('model_selections', 'N/A')}")
+        print(f"   📊 Battery levels count: {len(metrics.get('battery_levels', []))}")
 
         # Basic validation
         assert metrics["total_tasks"] > 0, f"{controller_name}: No tasks generated"
@@ -86,10 +134,21 @@ def test_controller(controller_class, controller_name, power_profiles, test_data
         print(f"   Clean Energy: {metrics['clean_energy_percentage']:.1f}%")
         print(f"   Task Completion: {metrics.get('task_completion_rate', 0):.1f}%")
 
+        # Model selection breakdown
+        model_selections = metrics.get("model_selections", {})
+        if model_selections:
+            print("   Model usage:")
+            for model, count in model_selections.items():
+                if count > 0:
+                    print(f"     {model}: {count} times")
+
         return True
 
     except Exception as e:
-        print(f"❌ {controller_name} failed: {e}")
+        print(f"❌ {controller_name} simulation failed: {e}")
+        import traceback
+
+        traceback.print_exc()
         return False
 
 

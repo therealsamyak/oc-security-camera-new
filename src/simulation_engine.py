@@ -55,8 +55,8 @@ class TaskGenerator:
         if self.rng.random() < 0.1:  # 10% chance of no task
             return None
 
-        accuracy_req = self.rng.uniform(70.0, 95.0)
-        latency_req = self.rng.uniform(1000.0, 3000.0)
+        accuracy_req = self.rng.uniform(35.0, 55.0)  # Match actual model capabilities
+        latency_req = self.rng.uniform(1.0, 15.0)  # Match actual model latencies (ms)
 
         return Task(
             timestamp=timestamp,
