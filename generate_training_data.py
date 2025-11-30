@@ -112,9 +112,9 @@ def generate_training_scenarios(
     if seed is not None:
         np.random.seed(seed)
 
-    # Generate 75,000 purely random scenarios
+    # Generate 100,000 purely random scenarios
     scenarios = []
-    for _ in range(75000):
+    for _ in range(100000):
         battery = np.random.uniform(1, 100)
         clean_energy = np.random.uniform(0, 100)
         acc_req = np.random.uniform(0.2, 1.0)
@@ -136,7 +136,7 @@ def main():
     training_data = []
 
     for i, (battery, clean_energy, acc_req, lat_req) in enumerate(scenarios):
-        if i % 1000 == 0:
+        if i % 5000 == 0:
             print(f"Progress: {i}/{len(scenarios)}")
 
         try:
