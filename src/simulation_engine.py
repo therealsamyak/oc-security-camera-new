@@ -105,9 +105,10 @@ class SimulationEngine:
             "large_model_tasks": 0,
             "small_model_misses": 0,
             "large_model_misses": 0,
-            "total_energy_mwh": 0.0,
+            "total_energy_wh": 0.0,
             "clean_energy_mwh": 0.0,
             "battery_levels": [],
+            "clean_energy_wh": 0.0,
             "model_selections": {model: 0 for model in power_profiles.keys()},
         }
 
@@ -291,12 +292,16 @@ class SimulationEngine:
         # Update task and metrics
         task.completed = True
         task.model_used = choice.model_name
-        task.energy_used_mwh = power_mw * (duration_seconds / 3600)
+        task.energy_used_mwh = power_mw * (duration_seconds / 3600)  # mW * hours = mWh
         task.clean_energy_used_mwh = task.energy_used_mwh * (clean_energy_pct / 100)
 
         self.metrics["completed_tasks"] += 1
-        self.metrics["total_energy_mwh"] += task.energy_used_mwh
-        self.metrics["clean_energy_mwh"] += task.clean_energy_used_mwh
+        self.metrics["total_energy_wh"] += (
+            task.energy_used_mwh / 1000
+        )  # Convert mWh to Wh
+        self.metrics["clean_energy_wh"] += (
+            task.clean_energy_used_mwh / 1000
+        )  # Convert mWh to Wh
         self.metrics["model_selections"][choice.model_name] += 1
 
         # Track model usage categories
@@ -376,10 +381,10 @@ class SimulationEngine:
             self.metrics["large_model_miss_rate"] = 0.0
 
         # Calculate clean energy percentage
-        if self.metrics["total_energy_mwh"] > 0:
+        if self.metrics["total_energy_wh"] > 0:
             self.metrics["clean_energy_percentage"] = (
-                self.metrics["clean_energy_mwh"]
-                / self.metrics["total_energy_mwh"]
+                self.metrics.get("clean_energy_wh", 0.0)
+                / self.metrics["total_energy_wh"]
                 * 100
             )
         else:
