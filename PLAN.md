@@ -58,6 +58,9 @@
 
 ## Phase 4: Simulation Engine
 
+### IMPORTANT
+Ensure that only one new .py file is added to the root of this repository for this step (the file that runs the full simulation engine). It is fine to abstract code in an object-oriented / functional programming approach, but do that within `src/` directory such that the root only has that one .py file.
+
 ### 1. Core Simulation Framework
 
 - [ ] Create `SimulationEngine` class with configurable parameters:
