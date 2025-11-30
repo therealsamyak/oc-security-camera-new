@@ -50,7 +50,7 @@ class CustomController:
                 scenario["battery_level"] / 100.0,
                 scenario["clean_energy_percentage"] / 100.0,
                 scenario["accuracy_requirement"],  # Already 0-1 range
-                scenario["latency_requirement"] / 3000.0,
+                scenario["latency_requirement"] / 20.0,  # Normalize to 20ms max
             ]
         )
 

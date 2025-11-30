@@ -113,7 +113,7 @@ def generate_training_scenarios() -> List[Tuple[int, int, float, int]]:
     accuracy_requirements = [
         i / 100 for i in range(30, 101, 10)
     ]  # 0.3 to 1.0 (step 0.1)
-    latency_requirements = list(range(1000, 3001, 250))  # 1000ms to 3000ms
+    latency_requirements = [1, 2, 3, 5, 8, 10, 15, 20]  # 1ms to 20ms (realistic range)
 
     all_combinations = list(
         itertools.product(
