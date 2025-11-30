@@ -111,8 +111,8 @@ def generate_training_scenarios() -> List[Tuple[int, int, float, int]]:
     battery_levels = list(range(5, 101, 5))  # 5% to 100%
     clean_energy_levels = list(range(0, 101, 10))  # 0% to 100%
     accuracy_requirements = [
-        i / 100 for i in range(30, 101, 10)
-    ]  # 0.3 to 1.0 (step 0.1)
+        i / 100 for i in range(30, 101, 5)
+    ]  # 0.3 to 1.0 (step 0.05 - more variety)
     latency_requirements = [1, 2, 3, 5, 8, 10, 15, 20]  # 1ms to 20ms (realistic range)
 
     all_combinations = list(
@@ -124,10 +124,10 @@ def generate_training_scenarios() -> List[Tuple[int, int, float, int]]:
         )
     )
 
-    # Sample 10,000 combinations if too many
-    if len(all_combinations) > 10000:
+    # Sample 20,000 combinations if too many
+    if len(all_combinations) > 20000:
         np.random.shuffle(all_combinations)
-        all_combinations = all_combinations[:10000]
+        all_combinations = all_combinations[:20000]
 
     return all_combinations
 
