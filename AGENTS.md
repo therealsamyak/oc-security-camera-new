@@ -6,7 +6,7 @@
 
 ## Python
 
-- Your primary method for interacting with anything Python related should be 'uv'.
+- Your primary method for interacting with anything Python related should be 'uv'. THIS IS IMPORTANT.
 
 ## Plans
 
