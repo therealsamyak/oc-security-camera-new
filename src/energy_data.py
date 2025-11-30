@@ -19,7 +19,7 @@ class EnergyData:
 
         for csv_file in csv_files:
             try:
-                df = pd.read_csv(csv_file)
+                df = pd.read_csv(csv_file, dtype=str, low_memory=False)
                 region_name = csv_file.stem
                 self.data[region_name] = df
                 self.logger.info(f"Loaded {len(df)} records for {region_name}")
