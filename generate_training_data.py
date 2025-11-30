@@ -15,20 +15,20 @@ def load_power_profiles() -> Dict[str, Dict[str, float]]:
     """Load power profiles from results and model data from CSV."""
     with open("results/power_profiles.json", "r") as f:
         profiles = json.load(f)
-    
+
     # Load real model data
     model_data = {}
     with open("model-data/model-data.csv", "r") as f:
         lines = f.readlines()
         for line in lines[1:]:  # Skip header
-            parts = line.strip().split(',')
-            model = parts[0]
-            version = parts[1]
-            latency = float(parts[2])
-            accuracy = float(parts[3])
+            parts = line.strip().split(",")
+            model = parts[0].strip('"')
+            version = parts[1].strip('"')
+            latency = float(parts[2].strip('"'))
+            accuracy = float(parts[3].strip('"'))
             model_data[f"{model}_{version}"] = {
                 "accuracy": accuracy,
-                "latency": latency
+                "latency": latency,
             }
 
     models = {}
@@ -37,8 +37,12 @@ def load_power_profiles() -> Dict[str, Dict[str, float]]:
         real_data = model_data.get(model_name, {})
         models[model_name] = {
             "accuracy": real_data.get("accuracy", 85.0),  # Fallback to 85% if not found
-            "latency": real_data.get("latency", data["avg_inference_time_seconds"] * 1000),  # Use real latency, fallback to power profile
-            "power_cost": data["model_power_mw"],  # Keep power data from power profiling
+            "latency": real_data.get(
+                "latency", data["avg_inference_time_seconds"] * 1000
+            ),  # Use real latency, fallback to power profile
+            "power_cost": data[
+                "model_power_mw"
+            ],  # Keep power data from power profiling
         }
 
     return models
@@ -102,11 +106,13 @@ def solve_mips_scenario(
     return selected_model, should_charge
 
 
-def generate_training_scenarios() -> List[Tuple[int, int, int, int]]:
+def generate_training_scenarios() -> List[Tuple[int, int, float, int]]:
     """Generate diverse training scenarios."""
     battery_levels = list(range(5, 101, 5))  # 5% to 100%
     clean_energy_levels = list(range(0, 101, 10))  # 0% to 100%
-    accuracy_requirements = list(range(70, 96, 5))  # 70% to 95%
+    accuracy_requirements = [
+        i / 100 for i in range(30, 101, 10)
+    ]  # 0.3 to 1.0 (step 0.1)
     latency_requirements = list(range(1000, 3001, 250))  # 1000ms to 3000ms
 
     all_combinations = list(

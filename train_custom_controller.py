@@ -28,29 +28,59 @@ class CustomController:
         with open(filepath, "r") as f:
             return json.load(f)
 
+    def get_model_accuracy_score(
+        self, user_requirement: float, model_map: float
+    ) -> float:
+        """Convert user 0-1 requirement to model suitability score."""
+        # Normalize model mAP to 0-1 range (assuming 40-60% mAP range)
+        normalized_model_score = (model_map - 40) / 20
+        normalized_model_score = np.clip(normalized_model_score, 0, 1)
+
+        # If user requirement > model capability, penalize
+        if user_requirement > normalized_model_score:
+            penalty = (user_requirement - normalized_model_score) * 0.5
+            return max(-1.0, normalized_model_score - penalty)
+
+        return normalized_model_score
+
     def extract_features(self, scenario: Dict) -> np.ndarray:
         """Extract features from training scenario."""
         return np.array(
             [
                 scenario["battery_level"] / 100.0,
                 scenario["clean_energy_percentage"] / 100.0,
-                scenario["accuracy_requirement"] / 100.0,
+                scenario["accuracy_requirement"],  # Already 0-1 range
                 scenario["latency_requirement"] / 3000.0,
             ]
         )
 
     def predict_model_and_charge(
-        self, features: np.ndarray, available_models: List[str]
+        self,
+        features: np.ndarray,
+        available_models: List[str],
+        model_data: Dict[str, Dict[str, float]],
     ) -> Tuple[str, bool]:
         """Predict model selection and charging decision using current weights."""
+        user_accuracy_req = features[2]
+
         # Simple linear model for model selection
         model_scores = {}
         for model in available_models:
             if model not in self.model_weights:
                 self.model_weights[model] = np.random.random(4)
 
-            score = np.dot(features, self.model_weights[model])
-            model_scores[model] = score
+            # Base score from learned weights
+            base_score = np.dot(features, self.model_weights[model])
+
+            # Accuracy suitability score
+            model_map = model_data[model]["accuracy"]
+            accuracy_score = self.get_model_accuracy_score(user_accuracy_req, model_map)
+
+            # Combine scores
+            combined_score = (
+                base_score + accuracy_score * 0.5
+            )  # Weight accuracy suitability
+            model_scores[model] = combined_score
 
         selected_model = max(model_scores.keys(), key=lambda x: model_scores[x])
 
@@ -109,7 +139,7 @@ class CustomController:
 
         # Forward pass
         prediction = self.predict_model_and_charge(
-            features, list(available_models.keys())
+            features, list(available_models.keys()), available_models
         )
 
         # Compute loss
@@ -187,16 +217,37 @@ class CustomController:
 
 
 def load_power_profiles() -> Dict[str, Dict[str, float]]:
-    """Load power profiles from results."""
+    """Load power profiles from results and real model data."""
     with open("results/power_profiles.json", "r") as f:
         profiles = json.load(f)
 
+    # Load real model data
+    model_data = {}
+    with open("model-data/model-data.csv", "r") as f:
+        lines = f.readlines()
+        for line in lines[1:]:  # Skip header
+            parts = line.strip().split(",")
+            model = parts[0].strip('"')
+            version = parts[1].strip('"')
+            latency = float(parts[2].strip('"'))
+            accuracy = float(parts[3].strip('"'))
+            model_data[f"{model}_{version}"] = {
+                "accuracy": accuracy,
+                "latency": latency,
+            }
+
     models = {}
     for model_name, data in profiles.items():
+        # Use real accuracy and latency from model-data.csv
+        real_data = model_data.get(model_name, {})
         models[model_name] = {
-            "accuracy": 85.0 + np.random.uniform(-5, 5),  # Mock accuracy
-            "latency": data["avg_inference_time_seconds"] * 1000,  # Convert to ms
-            "power_cost": data["model_power_mw"],
+            "accuracy": real_data.get("accuracy", 85.0),  # Fallback to 85% if not found
+            "latency": real_data.get(
+                "latency", data["avg_inference_time_seconds"] * 1000
+            ),  # Use real latency, fallback to power profile
+            "power_cost": data[
+                "model_power_mw"
+            ],  # Keep power data from power profiling
         }
 
     return models

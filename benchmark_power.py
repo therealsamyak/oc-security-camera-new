@@ -48,12 +48,8 @@ def main():
     for model_key, profile in profiles.items():
         print(f"{model_key}:")
         print(f"  Model Power: {profile['model_power_mw']:.2f} mW")
-        print(
-            f"  Energy per Inference: {profile['energy_per_inference_mwh']:.6f} mWh"
-        )
-        print(
-            f"  Avg Inference Time: {profile['avg_inference_time_seconds']:.3f} s"
-        )
+        print(f"  Energy per Inference: {profile['energy_per_inference_mwh']:.6f} mWh")
+        print(f"  Avg Inference Time: {profile['avg_inference_time_seconds']:.3f} s")
         print(f"  Success Rate: {profile['success_rate']:.2%}")
         print()
 
