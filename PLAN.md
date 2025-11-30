@@ -58,18 +58,92 @@
 
 ## Phase 4: Simulation Engine
 
-### 1. Core Simulation
+### 1. Core Simulation Framework
 
-- [ ] 7-day simulation with 5-second task intervals
-- [ ] Clean energy data integration (5-minute updates)
-- [ ] 4 weeks (seasonal), 4 locations support
-- [ ] Configurable from a `config.jsonc` file 
+- [ ] Create `SimulationEngine` class with configurable parameters:
+  - Duration: 7 days (604,800 seconds)
+  - Task interval: 5 seconds (120,960 total tasks)
+  - Time acceleration: configurable (1x, 10x, 100x)
+- [ ] Implement `TaskGenerator` for realistic security camera workload:
+  - Random task arrival with configurable frequency
+  - Accuracy requirements: 70-95% (uniform distribution)
+  - Latency requirements: 1000-3000ms (uniform distribution)
+- [ ] Integrate `EnergyData` class for 5-minute clean energy updates:
+  - Load 4 location datasets (CA, FL, NW, NY)
+  - Interpolate between 5-minute data points for 5-second tasks
+  - Support seasonal variations (4 weeks per season)
 
-### 2. Metrics Collection
+### 2. Configuration System
 
-- [ ] Small/Large miss rates
-- [ ] Total/clean energy usage
-- [ ] CSV output generation
+- [ ] Create `config.jsonc` structure:
+  ```jsonc
+  {
+    "simulation": {
+      "duration_days": 7,
+      "task_interval_seconds": 5,
+      "time_acceleration": 1
+    },
+    "battery": {
+      "capacity_wh": 5.0,
+      "charge_rate_watts": 100
+    },
+    "locations": ["CA", "FL", "NW", "NY"],
+    "seasons": ["winter", "spring", "summer", "fall"],
+    "controllers": ["naive_weak", "naive_strong", "oracle", "custom"],
+    "output_dir": "results/"
+  }
+  ```
+- [ ] Implement `ConfigLoader` class to parse and validate configuration
+- [ ] Update `Battery` class to work directly with Wh units:
+  - **Power profiles use mW/mWh, convert to W/Wh: `power_w = power_mw / 1000`**
+  - **Energy: `energy_wh = energy_mwh / 1000`**
+  - **No voltage conversion needed - direct Wh units**
+- [ ] Implement charging behavior: when controller decides to charge, continue charging until next controller decision (next task interval)
+
+### 3. Metrics Collection System
+
+- [ ] Create `MetricsCollector` class with real-time tracking:
+  - Small model miss rate: (failed_small_tasks / total_small_tasks) × 100
+  - Large model miss rate: (failed_large_tasks / total_large_tasks) × 100
+  - Total energy consumption: sum(all_power_usage)
+  - Clean energy percentage: (clean_energy / total_energy) × 100
+  - Battery level tracking over time
+  - Model selection distribution
+- [ ] Implement `CSVExporter` for results:
+  - Per-simulation summary CSV
+  - Detailed time-series data (optional)
+  - Aggregated statistics across all simulations
+
+### 4. Simulation Orchestrator
+
+- [ ] Create `SimulationRunner` class:
+  - Execute 192 total simulations (4 locations × 4 seasons × 4 controllers × 3 weeks)
+  - Parallel execution support with configurable worker count
+  - **Failure handling: terminate immediately on any failure, ignore all results, no CSV output**
+  - Progress tracking for successful simulations only
+  - Clean error logging to console only
+- [ ] Implement result aggregation and comparison tools (only for successful runs)
+
+### 5. Phase 4 Testing
+
+- [ ] Create `test_simulation_engine.py`:
+  - Unit tests for `SimulationEngine` class with short durations (1-5 minutes)
+  - Test `TaskGenerator` with deterministic seeds for reproducible results
+  - Validate energy interpolation between 5-minute data points
+  - Test configuration loading and validation
+- [ ] Create `test_metrics_collector.py`:
+  - Test metrics calculation accuracy with known inputs
+  - Validate CSV export format and data integrity
+  - Test edge cases (empty simulations, single task scenarios)
+- [ ] Create `test_battery_integration.py`:
+  - Test Wh-based battery operations with power profile conversions
+  - Validate charging behavior between controller decisions
+  - Test battery depletion and recovery scenarios
+- [ ] Create `test_integration_short.py`:
+  - End-to-end test with 1-hour simulations instead of 7-day
+  - Test all controller types with reduced task count
+  - Validate failure handling (terminate on error, no CSV output)
+  - Performance benchmarking for short simulation runs
 
 ## Phase 5: Testing & Validation
 
