@@ -2,15 +2,15 @@ import logging
 
 
 class Battery:
-    """Simulates a 4000 mAh battery with charging and discharging."""
+    """Simulates a battery with charging and discharging using Wh units."""
 
-    def __init__(self, capacity_mah: float = 4000.0, charge_rate_watts: float = 100.0):
-        self.capacity_mah = capacity_mah
+    def __init__(self, capacity_wh: float = 5.0, charge_rate_watts: float = 100.0):
+        self.capacity_wh = capacity_wh
         self.charge_rate_watts = charge_rate_watts
-        self.current_level_mah = capacity_mah  # Start fully charged
+        self.current_level_wh = capacity_wh  # Start fully charged
         self.logger = logging.getLogger(__name__)
-        self.total_energy_used_mwh = 0.0
-        self.total_clean_energy_used_mwh = 0.0
+        self.total_energy_used_wh = 0.0
+        self.total_clean_energy_used_wh = 0.0
 
     def discharge(
         self,
@@ -29,20 +29,18 @@ class Battery:
         Returns:
             True if discharge successful, False if insufficient battery
         """
-        energy_mwh = power_mw * (duration_seconds / 3600.0)  # Convert to mWh
-        energy_mah = energy_mwh / 3.7  # Convert mWh to mAh (assuming 3.7V Li-ion)
+        power_w = power_mw / 1000.0  # Convert mW to W
+        energy_wh = power_w * (duration_seconds / 3600.0)  # Convert to Wh
 
-        if self.current_level_mah < energy_mah:
+        if self.current_level_wh < energy_wh:
             self.logger.error(
-                f"Insufficient battery: {self.current_level_mah:.2f}mAh < {energy_mah:.2f}mAh"
+                f"Insufficient battery: {self.current_level_wh:.4f}Wh < {energy_wh:.4f}Wh"
             )
             return False
 
-        self.current_level_mah -= energy_mah
-        self.total_energy_used_mwh += energy_mwh
-        self.total_clean_energy_used_mwh += energy_mwh * (
-            clean_energy_percentage / 100.0
-        )
+        self.current_level_wh -= energy_wh
+        self.total_energy_used_wh += energy_wh
+        self.total_clean_energy_used_wh += energy_wh * (clean_energy_percentage / 100.0)
         return True
 
     def charge(self, duration_seconds: float) -> float:
@@ -53,34 +51,33 @@ class Battery:
             duration_seconds: Duration in seconds
 
         Returns:
-            Actual energy added in mAh
+            Actual energy added in Wh
         """
         energy_wh = self.charge_rate_watts * (duration_seconds / 3600.0)
-        energy_mah = energy_wh / 3.7  # Convert Wh to mAh
 
-        space_available = self.capacity_mah - self.current_level_mah
-        actual_charge = min(energy_mah, space_available)
+        space_available = self.capacity_wh - self.current_level_wh
+        actual_charge = min(energy_wh, space_available)
 
-        self.current_level_mah += actual_charge
+        self.current_level_wh += actual_charge
         return actual_charge
 
     def get_percentage(self) -> float:
         """Get current battery level as percentage."""
-        return (self.current_level_mah / self.capacity_mah) * 100.0
+        return (self.current_level_wh / self.capacity_wh) * 100.0
 
-    def get_level_mah(self) -> float:
-        """Get current battery level in mAh."""
-        return self.current_level_mah
+    def get_level_wh(self) -> float:
+        """Get current battery level in Wh."""
+        return self.current_level_wh
 
-    def get_total_energy_used_mwh(self) -> float:
-        """Get total energy used in mWh."""
-        return self.total_energy_used_mwh
+    def get_total_energy_used_wh(self) -> float:
+        """Get total energy used in Wh."""
+        return self.total_energy_used_wh
 
-    def get_total_clean_energy_used_mwh(self) -> float:
-        """Get total clean energy used in mWh."""
-        return self.total_clean_energy_used_mwh
+    def get_total_clean_energy_used_wh(self) -> float:
+        """Get total clean energy used in Wh."""
+        return self.total_clean_energy_used_wh
 
     def reset_energy_tracking(self):
         """Reset energy usage tracking."""
-        self.total_energy_used_mwh = 0.0
-        self.total_clean_energy_used_mwh = 0.0
+        self.total_energy_used_wh = 0.0
+        self.total_clean_energy_used_wh = 0.0

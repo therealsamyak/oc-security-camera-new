@@ -1,0 +1,15 @@
+{
+  "simulation": {
+    "duration_days": 7,
+    "task_interval_seconds": 5,
+    "time_acceleration": 1
+  },
+  "battery": {
+    "capacity_wh": 5.0,
+    "charge_rate_watts": 100
+  },
+  "locations": ["CA", "FL", "NW", "NY"],
+  "seasons": ["winter", "spring", "summer", "fall"],
+  "controllers": ["naive_weak", "naive_strong", "oracle", "custom"],
+  "output_dir": "results/"
+}
