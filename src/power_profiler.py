@@ -1,11 +1,12 @@
-import time
-import logging
 import json
-import subprocess
-import re
+import logging
 import os
-from typing import Dict, List, Tuple
+import re
+import subprocess
+import time
 from pathlib import Path
+from typing import Dict, List, Tuple
+
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -343,9 +344,9 @@ class PowerProfiler:
             "total_duration_seconds": total_duration,
             "avg_inference_time_seconds": avg_inference_time_seconds,
             "success_rate": successful_inferences / iterations,
-            "outliers_removed": iterations - len(trimmed_powers)
-            if iterations >= 20
-            else 0,
+            "outliers_removed": (
+                iterations - len(trimmed_powers) if iterations >= 20 else 0
+            ),
             "measurement_method": "powermetrics",
         }
 

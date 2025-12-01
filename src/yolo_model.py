@@ -1,9 +1,10 @@
-import psutil
-import time
 import logging
-import pandas as pd
-from ultralytics import YOLO
+import time
 from typing import Dict, Optional, Tuple
+
+import pandas as pd
+import psutil
+from ultralytics import YOLO
 
 
 class YOLOModel:

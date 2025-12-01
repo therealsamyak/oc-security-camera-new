@@ -3,14 +3,9 @@
 Unit tests for Wh-based battery operations and charging behavior.
 """
 
-import sys
 import unittest
-from pathlib import Path
 
-# Add src directory to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
-
-from battery import Battery
+from src.battery import Battery
 
 
 class TestBatteryIntegration(unittest.TestCase):
@@ -226,8 +221,9 @@ class TestBatteryIntegration(unittest.TestCase):
 
         # Test recovery by charging
         charge_energy = self.battery.charge(1800)  # Charge for 30 minutes
-        expected_charge = 50.0 * (1800 / 3600)  # 50W * 0.5h = 25Wh
-        self.assertAlmostEqual(charge_energy, expected_charge, places=8)
+        # But limited by battery capacity (5Wh available)
+        expected_limited = 5.0  # Battery capacity
+        self.assertAlmostEqual(charge_energy, expected_limited, places=8)
 
         # But limited by battery capacity
         self.assertEqual(self.battery.get_level_wh(), 5.0)

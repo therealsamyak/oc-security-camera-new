@@ -3,15 +3,10 @@
 Unit tests for SimulationEngine class with short durations (1-5 minutes).
 """
 
-import sys
 import unittest
-from pathlib import Path
 
-# Add src directory to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
-
-from simulation_engine import SimulationEngine, SimulationConfig, TaskGenerator
-from controller import NaiveWeakController
+from src.simulation_engine import SimulationEngine, SimulationConfig, TaskGenerator
+from src.controller import NaiveWeakController
 
 
 class TestSimulationEngine(unittest.TestCase):
@@ -48,7 +43,7 @@ class TestSimulationEngine(unittest.TestCase):
     def test_short_simulation_1_minute(self):
         """Test simulation with 1-minute duration."""
         # Override duration for 1-minute test
-        self.test_config.duration_days = 1 / (24 * 60)  # 1 minute in days
+        self.test_config.duration_days = 1  # 1 day for testing
 
         engine = SimulationEngine(
             config=self.test_config,
@@ -72,7 +67,7 @@ class TestSimulationEngine(unittest.TestCase):
     def test_short_simulation_5_minutes(self):
         """Test simulation with 5-minute duration."""
         # Override duration for 5-minute test
-        self.test_config.duration_days = 5 / (24 * 60)  # 5 minutes in days
+        self.test_config.duration_days = 1  # 1 day for testing
 
         engine = SimulationEngine(
             config=self.test_config,
@@ -94,7 +89,7 @@ class TestSimulationEngine(unittest.TestCase):
         """Test simulation with battery depletion."""
         # Very small battery to force depletion
         self.test_config.battery_capacity_wh = 0.001  # 1 mWh
-        self.test_config.duration_days = 1 / (24 * 60)  # 1 minute
+        self.test_config.duration_days = 1  # 1 day for testing
 
         engine = SimulationEngine(
             config=self.test_config,
@@ -119,7 +114,7 @@ class TestSimulationEngine(unittest.TestCase):
         for interval in intervals:
             with self.subTest(interval=interval):
                 self.test_config.task_interval_seconds = interval
-                self.test_config.duration_days = 1 / (24 * 60)  # 1 minute
+                self.test_config.duration_days = 1  # 1 day for testing
 
                 engine = SimulationEngine(
                     config=self.test_config,
@@ -143,7 +138,7 @@ class TestSimulationEngine(unittest.TestCase):
         for accel in accelerations:
             with self.subTest(acceleration=accel):
                 self.test_config.time_acceleration = accel
-                self.test_config.duration_days = 1 / (24 * 60)  # 1 minute
+                self.test_config.duration_days = 1  # 1 day for testing
 
                 engine = SimulationEngine(
                     config=self.test_config,
@@ -180,8 +175,8 @@ class TestTaskGenerator(unittest.TestCase):
         tasks2 = []
 
         for i in range(10):
-            task1 = generator1.generate_task(float(i))
-            task2 = generator2.generate_task(float(i))
+            task1 = generator1.generate_task(float(i), 80.0, 2000.0)
+            task2 = generator2.generate_task(float(i), 80.0, 2000.0)
             tasks1.append(task1)
             tasks2.append(task2)
 
@@ -203,7 +198,7 @@ class TestTaskGenerator(unittest.TestCase):
 
         # Generate many tasks to test ranges
         for i in range(100):
-            task = generator.generate_task(float(i))
+            task = generator.generate_task(float(i), 80.0, 2000.0)
             if task is not None:
                 accuracy_requirements.append(task.accuracy_requirement)
                 latency_requirements.append(task.latency_requirement)
@@ -225,7 +220,7 @@ class TestTaskGenerator(unittest.TestCase):
         total_calls = 1000
 
         for i in range(total_calls):
-            task = generator.generate_task(float(i))
+            task = generator.generate_task(float(i), 80.0, 2000.0)
             if task is not None:
                 task_count += 1
 

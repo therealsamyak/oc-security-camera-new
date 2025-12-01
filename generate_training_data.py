@@ -5,9 +5,10 @@ Generates optimal decisions for diverse scenarios and caches to JSON.
 """
 
 import json
-import pulp
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
+import pulp
 
 
 def load_power_profiles() -> Dict[str, Dict[str, float]]:

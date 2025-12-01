@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Dict
 from dataclasses import dataclass
+from typing import Dict
+
 import pulp
 
 

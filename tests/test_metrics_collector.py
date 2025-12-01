@@ -3,17 +3,13 @@
 Unit tests for MetricsCollector and CSVExporter classes.
 """
 
-import sys
 import unittest
 import tempfile
 import json
 import csv
 from pathlib import Path
 
-# Add src directory to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
-
-from metrics_collector import MetricsCollector, CSVExporter
+from src.metrics_collector import MetricsCollector, CSVExporter
 
 
 class TestMetricsCollector(unittest.TestCase):

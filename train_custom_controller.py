@@ -5,9 +5,10 @@ Trains model selection and charging decisions using MIPS-generated training data
 """
 
 import json
-import numpy as np
-from typing import Dict, List, Tuple, Optional
 import logging
+from typing import Dict, List, Optional, Tuple
+
+import numpy as np
 
 
 class CustomController:
@@ -275,9 +276,11 @@ class CustomController:
                     "model_weights": {
                         k: v.copy() for k, v in self.model_weights.items()
                     },
-                    "charge_weights": self.charge_weights.copy()
-                    if self.charge_weights is not None
-                    else None,
+                    "charge_weights": (
+                        self.charge_weights.copy()
+                        if self.charge_weights is not None
+                        else None
+                    ),
                 }
             else:
                 patience_counter += 1
@@ -321,7 +324,11 @@ class CustomController:
         weights_data = {
             "weights": self.weights,
             "model_weights": {k: v.tolist() for k, v in self.model_weights.items()},
-            "charge_weights": self.charge_weights.tolist() if self.charge_weights is not None else None,
+            "charge_weights": (
+                self.charge_weights.tolist()
+                if self.charge_weights is not None
+                else None
+            ),
             "charge_threshold": self.charge_threshold,
         }
 

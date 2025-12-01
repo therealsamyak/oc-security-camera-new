@@ -5,10 +5,10 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass
 from datetime import datetime
 
-from .battery import Battery
-from .controller import Controller
-from .energy_data import EnergyData
-from .config_loader import SimulationConfig
+from src.battery import Battery
+from src.controller import Controller
+from src.energy_data import EnergyData
+from src.config_loader import SimulationConfig
 
 
 @dataclass
@@ -343,7 +343,12 @@ class SimulationEngine:
 
     def _calculate_final_metrics(self):
         """Calculate final simulation metrics."""
+        # Always calculate metrics, even if no tasks were generated
         if self.metrics["total_tasks"] == 0:
+            self.metrics["task_completion_rate"] = 0.0
+            self.metrics["clean_energy_percentage"] = 0.0
+            self.metrics["small_model_miss_rate"] = 0.0
+            self.metrics["large_model_miss_rate"] = 0.0
             return
 
         # Calculate miss rates

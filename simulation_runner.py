@@ -16,16 +16,16 @@ from pathlib import Path
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from simulation_engine import SimulationEngine
-from controller import (
-    NaiveWeakController,
-    NaiveStrongController,
-    OracleController,
-    CustomController,
-)
 from config_loader import ConfigLoader
-from metrics_collector import CSVExporter
+from controller import (
+    CustomController,
+    NaiveStrongController,
+    NaiveWeakController,
+    OracleController,
+)
 from logging_config import setup_logging
+from metrics_collector import CSVExporter
+from simulation_engine import SimulationEngine
 
 
 class SimulationRunner:
@@ -313,14 +313,14 @@ class SimulationRunner:
             "total_simulations": len(self.all_results),
             "total_tasks": total_tasks,
             "total_completed_tasks": total_completed,
-            "overall_completion_rate": (total_completed / total_tasks * 100)
-            if total_tasks > 0
-            else 0,
+            "overall_completion_rate": (
+                (total_completed / total_tasks * 100) if total_tasks > 0 else 0
+            ),
             "total_energy_wh": total_energy,
             "total_clean_energy_wh": total_clean_energy,
-            "overall_clean_energy_percentage": (total_clean_energy / total_energy * 100)
-            if total_energy > 0
-            else 0,
+            "overall_clean_energy_percentage": (
+                (total_clean_energy / total_energy * 100) if total_energy > 0 else 0
+            ),
             "controller_performance": controller_stats,
             "failed_simulations": len(self.failed_simulations),
         }
