@@ -2,7 +2,7 @@
   // Simulation parameters
   "simulation": {
     // Total simulation duration in days
-    "duration_days": 7,
+    "duration_days": 1,
     // Time between simulation tasks in seconds
     "task_interval_seconds": 5,
     // Time acceleration factor (1 = real-time)
