@@ -290,11 +290,11 @@ def main():
         # Create batch simulation runner
         runner = BatchSimulationRunner(
             config_path="config.jsonc",
-            max_workers=1,  # Sequential execution only
+            max_workers=8,  # Parallel execution with 8 workers
         )
 
-        # Run batch simulations sequentially
-        success = runner.run_batch_simulations(parallel=False)
+        # Run batch simulations in parallel
+        success = runner.run_batch_simulations(parallel=True)
 
         if success:
             # Print summary statistics
