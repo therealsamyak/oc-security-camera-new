@@ -9,7 +9,7 @@ Do NOT commit any files unless otherwise instructed.
 
 ## Python
 
-- Your primary method for interacting with anything Python related should be 'uv'. THIS IS IMPORTANT.
+- Your primary method for interacting with anything Python related should be **uv** (https://docs.astral.sh/uv/). **THIS IS IMPORTANT**.
 
 ## Plans
 
