@@ -3,7 +3,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 class MetricsCollector:
@@ -243,10 +243,13 @@ class CSVExporter:
             self.logger.error(f"Failed to export time-series data: {e}")
             return ""
 
-    def export_aggregated_results(self, all_simulations: List[Dict[str, Any]]) -> str:
+    def export_aggregated_results(
+        self, all_simulations: List[Dict[str, Any]], filename: Optional[str] = None
+    ) -> str:
         """Export aggregated results across multiple simulations."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"aggregated_results_{timestamp}.csv"
+        if filename is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"aggregated_results_{timestamp}.csv"
         filepath = self.output_dir / filename
 
         if not all_simulations:
@@ -271,6 +274,82 @@ class CSVExporter:
 
         except Exception as e:
             self.logger.error(f"Failed to export aggregated results: {e}")
+            return ""
+
+    def export_detailed_results(
+        self, all_simulations: List[Dict[str, Any]], filename: Optional[str] = None
+    ) -> str:
+        """Export detailed results with all parameters for batch simulations."""
+        if filename is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"detailed_results_{timestamp}.csv"
+        filepath = self.output_dir / filename
+
+        if not all_simulations:
+            self.logger.warning("No simulation data to export")
+            return ""
+
+        try:
+            # Define detailed fieldnames including parameter variations
+            detailed_fieldnames = [
+                "simulation_id",
+                "variation_id",
+                "location",
+                "season",
+                "week",
+                "controller",
+                "accuracy_requirement",
+                "latency_requirement",
+                "battery_capacity_wh",
+                "charge_rate_watts",
+                "total_tasks",
+                "completed_tasks",
+                "missed_deadlines",
+                "task_completion_rate",
+                "small_model_tasks",
+                "large_model_tasks",
+                "small_model_miss_rate",
+                "large_model_miss_rate",
+                "total_energy_wh",
+                "clean_energy_wh",
+                "clean_energy_percentage",
+                "final_battery_level",
+                "avg_battery_level",
+                "timestamp",
+                "success",
+            ]
+
+            # Add model selection counts
+            model_fields = [
+                f"{model}_count"
+                for model in [
+                    "YOLOv10_N",
+                    "YOLOv10_S",
+                    "YOLOv10_M",
+                    "YOLOv10_B",
+                    "YOLOv10_L",
+                    "YOLOv10_X",
+                ]
+            ]
+            detailed_fieldnames.extend(model_fields)
+
+            # Collect any additional fields from simulations
+            all_fieldnames = set(detailed_fieldnames)
+            for sim in all_simulations:
+                all_fieldnames.update(sim.keys())
+
+            all_fieldnames = sorted(list(all_fieldnames))
+
+            with open(filepath, "w", newline="") as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=all_fieldnames)
+                writer.writeheader()
+                writer.writerows(all_simulations)
+
+            self.logger.info(f"Detailed results exported to {filepath}")
+            return str(filepath)
+
+        except Exception as e:
+            self.logger.error(f"Failed to export detailed results: {e}")
             return ""
 
     def export_json(self, data: Dict[str, Any], filename: str) -> str:

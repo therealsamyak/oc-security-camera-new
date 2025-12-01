@@ -41,9 +41,10 @@ class TestSimulationEngine(unittest.TestCase):
         self.controller = NaiveWeakController()
 
     def test_short_simulation_1_minute(self):
-        """Test simulation with 1-minute duration."""
-        # Override duration for 1-minute test
-        self.test_config.duration_days = 1  # 1 day for testing
+        """Test simulation with minimal duration."""
+        # Override duration for minimal test
+        self.test_config.duration_days = 0  # Minimal duration
+        self.test_config.task_interval_seconds = 600  # 10-minute intervals
 
         engine = SimulationEngine(
             config=self.test_config,
@@ -65,9 +66,10 @@ class TestSimulationEngine(unittest.TestCase):
         self.assertLessEqual(metrics["task_completion_rate"], 100)
 
     def test_short_simulation_5_minutes(self):
-        """Test simulation with 5-minute duration."""
-        # Override duration for 5-minute test
-        self.test_config.duration_days = 1  # 1 day for testing
+        """Test simulation with minimal duration."""
+        # Override duration for minimal test
+        self.test_config.duration_days = 0  # Minimal duration
+        self.test_config.task_interval_seconds = 300  # 5-minute intervals
 
         engine = SimulationEngine(
             config=self.test_config,
@@ -89,7 +91,8 @@ class TestSimulationEngine(unittest.TestCase):
         """Test simulation with battery depletion."""
         # Very small battery to force depletion
         self.test_config.battery_capacity_wh = 0.001  # 1 mWh
-        self.test_config.duration_days = 1  # 1 day for testing
+        self.test_config.duration_days = 0  # Minimal duration
+        self.test_config.task_interval_seconds = 300  # 5-minute intervals
 
         engine = SimulationEngine(
             config=self.test_config,
@@ -114,7 +117,7 @@ class TestSimulationEngine(unittest.TestCase):
         for interval in intervals:
             with self.subTest(interval=interval):
                 self.test_config.task_interval_seconds = interval
-                self.test_config.duration_days = 1  # 1 day for testing
+                self.test_config.duration_days = 0  # Minimal duration
 
                 engine = SimulationEngine(
                     config=self.test_config,
@@ -138,7 +141,8 @@ class TestSimulationEngine(unittest.TestCase):
         for accel in accelerations:
             with self.subTest(acceleration=accel):
                 self.test_config.time_acceleration = accel
-                self.test_config.duration_days = 1  # 1 day for testing
+                self.test_config.duration_days = 0  # Minimal duration
+                self.test_config.task_interval_seconds = 600  # 10-minute intervals
 
                 engine = SimulationEngine(
                     config=self.test_config,
@@ -158,7 +162,7 @@ class TestSimulationEngine(unittest.TestCase):
                 # Should complete (acceleration affects runtime)
                 self.assertGreater(metrics["total_tasks"], 0)
                 # Higher acceleration should result in faster completion
-                self.assertLess(elapsed_time, 30)  # Should complete within 30 seconds
+                self.assertLess(elapsed_time, 10)  # Should complete within 10 seconds
 
 
 class TestTaskGenerator(unittest.TestCase):

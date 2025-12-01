@@ -29,5 +29,19 @@
   // Controller types to test
   "controllers": ["naive_weak", "naive_strong", "oracle", "custom"],
   // Directory for simulation results
-  "output_dir": "results/"
+  "output_dir": "results/",
+  // Batch simulation configuration
+  "batch_run": {
+    // Number of parameter variations to generate
+    "num_variations": 10,
+    // Random seed for reproducibility (null for random)
+    "random_seed": null,
+    // Output detailed CSV with all variations
+    "output_detailed_csv": true,
+    // Parameter ranges for batch simulation
+    "accuracy_range": {"min": 30, "max": 80},
+    "latency_range": {"min": 2, "max": 15},
+    "battery_capacity_range": {"min": 2, "max": 15},
+    "charge_rate_range": {"min": 50, "max": 200}
+  }
 }
