@@ -434,14 +434,6 @@ class PowerProfiler:
         if profile_key in self.power_profiles:
             return self.power_profiles[profile_key]["model_power_mw"]
 
-        # Default estimate if not found (based on typical YOLO model power consumption)
-        self.logger.warning(f"No power profile found for {profile_key}, using estimate")
-        version_power_map = {
-            "N": 2000,
-            "S": 3500,
-            "M": 6000,
-            "B": 8000,
-            "L": 12000,
-            "X": 18000,
-        }
-        return version_power_map.get(model_version, 5000)
+        raise RuntimeError(
+            f"No power profile found for {profile_key}. Run benchmark_power.py first."
+        )

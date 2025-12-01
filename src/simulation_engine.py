@@ -124,8 +124,9 @@ class SimulationEngine:
 
         except Exception as e:
             self.logger.error(f"Failed to load energy data: {e}")
-            # Fallback to default clean energy profile
-            return self._create_default_energy_profile()
+            raise RuntimeError(
+                f"Failed to load energy data for {self.location} {self.season}: {e}"
+            )
 
     def _filter_by_season(self, data: List[Dict], season: str) -> List[Dict]:
         """Filter energy data by season."""
@@ -142,7 +143,7 @@ class SimulationEngine:
 
         for entry in data:
             try:
-                month = datetime.fromisoformat(entry["timestamp"]).month
+                month = datetime.fromisoformat(entry["Datetime (UTC)"]).month
                 if month in months:
                     filtered.append(entry)
             except (KeyError, ValueError):
@@ -153,18 +154,20 @@ class SimulationEngine:
     def _interpolate_energy_data(self, data: List[Dict]) -> Dict[int, float]:
         """Interpolate 5-minute energy data to 5-second intervals."""
         if not data:
-            return self._create_default_energy_profile()
+            raise RuntimeError(
+                f"No energy data available for {self.location} {self.season}"
+            )
 
         # Create mapping from timestamp (seconds) to clean energy percentage
         energy_map = {}
 
         # Sort data by timestamp
-        data.sort(key=lambda x: x["timestamp"])
+        data.sort(key=lambda x: x["Datetime (UTC)"])
 
         # Convert to seconds and interpolate
         for i in range(len(data) - 1):
-            current_time = datetime.fromisoformat(data[i]["timestamp"])
-            next_time = datetime.fromisoformat(data[i + 1]["timestamp"])
+            current_time = datetime.fromisoformat(data[i]["Datetime (UTC)"])
+            next_time = datetime.fromisoformat(data[i + 1]["Datetime (UTC)"])
 
             current_seconds = (
                 current_time - current_time.replace(hour=0, minute=0, second=0)
@@ -173,8 +176,12 @@ class SimulationEngine:
                 next_time - next_time.replace(hour=0, minute=0, second=0)
             ).total_seconds()
 
-            current_clean = data[i].get("clean_energy_percentage", 50.0)
-            next_clean = data[i + 1].get("clean_energy_percentage", 50.0)
+            current_clean = float(
+                data[i].get("Carbon-free energy percentage (CFE%)", 50.0)
+            )
+            next_clean = float(
+                data[i + 1].get("Carbon-free energy percentage (CFE%)", 50.0)
+            )
 
             # Interpolate for each 5-second interval
             steps = int((next_seconds - current_seconds) / 5)
@@ -205,11 +212,11 @@ class SimulationEngine:
         # Find closest timestamp in energy data
         available_times = sorted(self.clean_energy_data.keys())
         if not available_times:
-            return 50.0  # Default fallback
+            raise RuntimeError("No clean energy data available")
 
         # Find the closest time point
         closest_time = min(available_times, key=lambda x: abs(x - seconds_in_day))
-        return self.clean_energy_data.get(closest_time, 50.0)
+        return self.clean_energy_data[closest_time]
 
     def _get_available_models(self) -> Dict[str, Dict[str, float]]:
         """Get available models with their specs."""
@@ -217,8 +224,7 @@ class SimulationEngine:
         for name, profile in self.power_profiles.items():
             models[name] = {
                 "accuracy": profile["accuracy"],
-                "latency": profile["avg_inference_time_seconds"]
-                * 1000,  # Convert to ms
+                "latency": profile["avg_inference_time_seconds"],  # Keep in seconds
                 "power_cost": profile["model_power_mw"],  # Power in mW
             }
         return models
@@ -259,7 +265,7 @@ class SimulationEngine:
             self.logger.debug(
                 f"[{sim_id}] Task missed deadline: model {choice.model_name} "
                 f"accuracy={model_specs['accuracy']:.3f} (need {task.accuracy_requirement:.3f}), "
-                f"latency={model_specs['latency']:.1f}ms (need {task.latency_requirement:.1f}ms)"
+                f"latency={model_specs['latency']:.3f}s (need {task.latency_requirement:.3f}s)"
             )
 
             # Track model-specific misses
@@ -272,7 +278,7 @@ class SimulationEngine:
 
         # Execute inference
         power_mw = model_specs["power_cost"]
-        duration_seconds = model_specs["latency"] / 1000  # Convert ms to seconds
+        duration_seconds = model_specs["latency"]  # Already in seconds
 
         self.logger.debug(
             f"[{sim_id}] Executing inference: {choice.model_name}, "
