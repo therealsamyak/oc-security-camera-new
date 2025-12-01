@@ -34,8 +34,8 @@ class CustomController:
         self, user_requirement: float, model_map: float
     ) -> float:
         """Convert user 0-1 requirement to model suitability score."""
-        # Normalize model mAP to 0-1 range (actual range 35-60% mAP)
-        normalized_model_score = (model_map - 35) / 25
+        # Model accuracy is already in 0-1 range
+        normalized_model_score = model_map
         normalized_model_score = np.clip(normalized_model_score, 0, 1)
 
         # If user requirement > model capability, penalize

@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pulp
+import concurrent.futures
 
 
 def load_power_profiles() -> Dict[str, Dict[str, float]]:
@@ -85,9 +86,28 @@ def solve_mips_scenario(
 
     prob += pulp.lpSum(model_vars.values()) == 1
 
+    # Filter models based on requirements with edge cases
+    min_accuracy_model = min(available_models.keys(), key=lambda x: available_models[x]["accuracy"])
+    max_accuracy_model = max(available_models.keys(), key=lambda x: available_models[x]["accuracy"])
+    min_accuracy = available_models[min_accuracy_model]["accuracy"]
+    max_accuracy = available_models[max_accuracy_model]["accuracy"]
+    
+    # If requirement is higher than highest model, force use of highest model
+    if accuracy_requirement > max_accuracy:
+        for name in available_models.keys():
+            if name != max_accuracy_model:
+                prob += model_vars[name] == 0
+    # If requirement is lower than lowest model, allow any model (no filtering)
+    elif accuracy_requirement < min_accuracy:
+        pass  # No accuracy filtering, all models eligible
+    else:
+        # Normal filtering based on accuracy requirement
+        for name, specs in available_models.items():
+            if specs["accuracy"] < accuracy_requirement:
+                prob += model_vars[name] == 0
+    
+    # Apply latency filtering to all cases
     for name, specs in available_models.items():
-        if specs["accuracy"] < accuracy_requirement:
-            prob += model_vars[name] == 0
         if specs["latency"] > latency_requirement:
             prob += model_vars[name] == 0
 
@@ -106,6 +126,31 @@ def solve_mips_scenario(
     return selected_model, should_charge
 
 
+def solve_scenario_wrapper(scenario_data: Tuple[int, int, float, int]) -> Optional[Dict]:
+    """Wrapper function for parallel execution of scenario solving."""
+    battery, clean_energy, acc_req, lat_req = scenario_data
+    
+    # Load models inside the worker process to avoid serialization issues
+    models = load_power_profiles()
+    
+    try:
+        selected_model, should_charge = solve_mips_scenario(
+            battery, clean_energy, acc_req, lat_req, models
+        )
+        
+        return {
+            "battery_level": int(battery),
+            "clean_energy_percentage": int(clean_energy),
+            "accuracy_requirement": float(acc_req),
+            "latency_requirement": int(lat_req),
+            "optimal_model": selected_model,
+            "should_charge": bool(should_charge),
+        }
+    except Exception as e:
+        print(f"Error solving scenario: {e}")
+        return None
+
+
 def generate_training_scenarios(
     seed: Optional[int] = None,
 ) -> List[Tuple[int, int, float, int]]:
@@ -118,7 +163,7 @@ def generate_training_scenarios(
     for _ in range(100000):
         battery = np.random.uniform(1, 100)
         clean_energy = np.random.uniform(0, 100)
-        acc_req = np.random.uniform(0.2, 1.0)
+        acc_req = np.random.uniform(0.3, 1.0)
         lat_req = np.random.choice([1, 2, 3, 5, 8, 10, 15, 20, 25, 30])
         scenarios.append((battery, clean_energy, acc_req, lat_req))
 
@@ -133,31 +178,38 @@ def main():
     print("Generating training scenarios...")
     scenarios = generate_training_scenarios()
 
-    print(f"Solving MIPS for {len(scenarios)} scenarios...")
+    print(f"Solving MIPS for {len(scenarios)} scenarios in parallel...")
     training_data = []
 
-    for i, (battery, clean_energy, acc_req, lat_req) in enumerate(scenarios):
-        if i % 1000 == 0:
-            print(f"Progress: {i}/{len(scenarios)}")
+    # Prepare scenarios for parallel execution
+    scenario_data_list = [(battery, clean_energy, acc_req, lat_req, models) 
+                          for battery, clean_energy, acc_req, lat_req in scenarios]
 
-        try:
-            selected_model, should_charge = solve_mips_scenario(
-                battery, clean_energy, acc_req, lat_req, models
-            )
+    # Use ProcessPoolExecutor for parallel execution
+    max_workers = 8  # Adjust based on your CPU cores
+    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all scenarios for processing
+        future_to_scenario = {
+            executor.submit(solve_scenario_wrapper, scenario_data): i
+            for i, scenario_data in enumerate(scenario_data_list)
+        }
 
-            training_data.append(
-                {
-                    "battery_level": int(battery),
-                    "clean_energy_percentage": int(clean_energy),
-                    "accuracy_requirement": float(acc_req),
-                    "latency_requirement": int(lat_req),
-                    "optimal_model": selected_model,
-                    "should_charge": bool(should_charge),
-                }
-            )
-        except Exception as e:
-            print(f"Error solving scenario {i}: {e}")
-            continue
+        completed_count = 0
+        # Collect results as they complete
+        for future in concurrent.futures.as_completed(future_to_scenario):
+            scenario_index = future_to_scenario[future]
+            completed_count += 1
+            
+            if completed_count % 1000 == 0:
+                print(f"Progress: {completed_count}/{len(scenarios)}")
+            
+            try:
+                result = future.result()
+                if result:
+                    training_data.append(result)
+            except Exception as e:
+                print(f"Error processing scenario {scenario_index}: {e}")
+                continue
 
     print(f"Generated {len(training_data)} training samples")
 

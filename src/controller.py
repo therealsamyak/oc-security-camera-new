@@ -196,7 +196,7 @@ class CustomController(Controller):
         features = [
             battery_level / 100.0,
             clean_energy_percentage / 100.0,
-            user_accuracy_requirement / 100.0,
+            user_accuracy_requirement,
             user_latency_requirement / 3000.0,
         ]
 
