@@ -165,7 +165,7 @@ class BatchSimulationRunner(SimulationRunnerBase):
             self.logger.debug(
                 f"[Variation {variation['variation_id']}] Using parallel execution with {self.max_workers} workers"
             )
-            with concurrent.futures.ThreadPoolExecutor(
+            with concurrent.futures.ProcessPoolExecutor(
                 max_workers=self.max_workers
             ) as executor:
                 # Submit all simulations with variation config
