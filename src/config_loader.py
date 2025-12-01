@@ -2,6 +2,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import re
 
 
 class SimulationConfig:
@@ -39,10 +40,14 @@ class ConfigLoader:
         self.config = self._load_config()
 
     def _load_config(self) -> Dict[str, Any]:
-        """Load configuration from JSON file."""
+        """Load configuration from JSON file, ignoring comments."""
         try:
             with open(self.config_path, "r") as f:
-                config = json.load(f)
+                content = f.read()
+                # Remove JSONC comments (// and /* */)
+                content = re.sub(r"//.*", "", content)
+                content = re.sub(r"/\*.*?\*/", "", content, flags=re.DOTALL)
+                config = json.loads(content)
             self.logger.info(f"Loaded configuration from {self.config_path}")
             return config
         except FileNotFoundError:

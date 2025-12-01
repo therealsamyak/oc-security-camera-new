@@ -1,17 +1,30 @@
 {
+  // Simulation parameters
   "simulation": {
+    // Total simulation duration in days
     "duration_days": 7,
+    // Time between simulation tasks in seconds
     "task_interval_seconds": 5,
+    // Time acceleration factor (1 = real-time)
     "time_acceleration": 1,
+    // Minimum accuracy requirement percentage for user tasks
     "user_accuracy_requirement": 45.0,
+    // Maximum latency requirement in seconds for user tasks
     "user_latency_requirement": 8.0
   },
+  // Battery configuration
   "battery": {
+    // Total battery capacity in watt-hours
     "capacity_wh": 5.0,
+    // Maximum charging rate in watts
     "charge_rate_watts": 100
   },
+  // Geographic locations for energy data
   "locations": ["CA", "FL", "NW", "NY"],
+  // Seasons to simulate
   "seasons": ["winter", "spring", "summer", "fall"],
+  // Controller types to test
   "controllers": ["naive_weak", "naive_strong", "oracle", "custom"],
+  // Directory for simulation results
   "output_dir": "results/"
 }
