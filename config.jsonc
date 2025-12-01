@@ -33,7 +33,7 @@
   // Batch simulation configuration
   "batch_run": {
     // Number of parameter variations to generate
-    "num_variations": 10,
+    "num_variations": 4,
     // Random seed for reproducibility (null for random)
     "random_seed": null,
     // Output detailed CSV with all variations
