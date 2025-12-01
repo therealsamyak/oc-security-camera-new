@@ -181,17 +181,13 @@ def main():
     print(f"Solving MIPS for {len(scenarios)} scenarios in parallel...")
     training_data = []
 
-    # Prepare scenarios for parallel execution
-    scenario_data_list = [(battery, clean_energy, acc_req, lat_req, models) 
-                          for battery, clean_energy, acc_req, lat_req in scenarios]
-
     # Use ProcessPoolExecutor for parallel execution
     max_workers = 8  # Adjust based on your CPU cores
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
         # Submit all scenarios for processing
         future_to_scenario = {
-            executor.submit(solve_scenario_wrapper, scenario_data): i
-            for i, scenario_data in enumerate(scenario_data_list)
+            executor.submit(solve_scenario_wrapper, scenario): i
+            for i, scenario in enumerate(scenarios)
         }
 
         completed_count = 0
