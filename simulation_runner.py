@@ -53,7 +53,7 @@ class BasicSimulationRunner(SimulationRunnerBase):
             locations=locations,
             seasons=seasons,
             controllers=controllers,
-            weeks=[1]  # Week 1 only
+            weeks=[1],  # Week 1 only
         )
 
         successful_results = []

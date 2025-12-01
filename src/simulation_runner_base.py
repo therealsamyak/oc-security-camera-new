@@ -17,6 +17,7 @@ from controller import (
     NaiveWeakController,
     OracleController,
 )
+from energy_data import EnergyData
 from simulation_engine import SimulationEngine
 
 
@@ -30,6 +31,9 @@ class SimulationRunnerBase:
 
         # Load power profiles
         self.power_profiles = self._load_power_profiles()
+
+        # Load energy data once and reuse
+        self.energy_data = EnergyData()
 
         # Results storage
         self.all_results = []
@@ -100,6 +104,9 @@ class SimulationRunnerBase:
         sim_config: Optional[SimulationConfig] = None,
     ) -> Optional[Dict[str, Any]]:
         """Run a single simulation and return results."""
+        simulation_start_time = datetime.now()
+        simulation_id = simulation_params.get("simulation_id", "unknown")
+
         try:
             # Extract parameters
             location = simulation_params["location"]
@@ -108,17 +115,32 @@ class SimulationRunnerBase:
             controller_type = simulation_params["controller"]
 
             self.logger.info(
-                f"Starting simulation: {location} {season} week {week} with {controller_type}"
+                f"[{simulation_id}] Starting simulation: {location} {season} week {week} with {controller_type}"
+            )
+            self.logger.debug(
+                f"[{simulation_id}] Parameters: accuracy={sim_config.user_accuracy_requirement if sim_config else 'default'}, "
+                f"latency={sim_config.user_latency_requirement if sim_config else 'default'}, "
+                f"battery={sim_config.battery_capacity_wh if sim_config else 'default'}Wh, "
+                f"charge_rate={sim_config.charge_rate_watts if sim_config else 'default'}W"
             )
 
             # Create controller
+            self.logger.debug(
+                f"[{simulation_id}] Creating controller: {controller_type}"
+            )
             controller = self._create_controller(controller_type)
 
             # Get simulation config (use provided override or default)
             if sim_config is None:
+                self.logger.debug(f"[{simulation_id}] Using default simulation config")
                 sim_config = self.config_loader.get_simulation_config()
+            else:
+                self.logger.debug(
+                    f"[{simulation_id}] Using overridden simulation config"
+                )
 
             # Create and run simulation
+            self.logger.debug(f"[{simulation_id}] Creating simulation engine")
             engine = SimulationEngine(
                 config=sim_config,
                 controller=controller,
@@ -126,10 +148,23 @@ class SimulationRunnerBase:
                 season=season,
                 week=week,
                 power_profiles=self.power_profiles,
+                energy_data=self.energy_data,
             )
 
+            self.logger.debug(f"[{simulation_id}] Starting simulation execution")
             # Run simulation
             metrics = engine.run()
+
+            # Calculate execution time
+            execution_time = (datetime.now() - simulation_start_time).total_seconds()
+            self.logger.info(
+                f"[{simulation_id}] Simulation completed in {execution_time:.2f} seconds"
+            )
+            self.logger.debug(
+                f"[{simulation_id}] Metrics: {metrics.get('total_tasks', 0)} tasks, "
+                f"{metrics.get('completed_tasks', 0)} completed, "
+                f"{metrics.get('task_completion_rate', 0):.1f}% completion rate"
+            )
 
             # Add simulation metadata
             result = {
@@ -138,8 +173,9 @@ class SimulationRunnerBase:
                 "season": season,
                 "week": week,
                 "controller": controller_type,
-                "simulation_id": f"{location}_{season}_week{week}_{controller_type}",
-                "timestamp": datetime.now().isoformat(),
+                "simulation_id": simulation_id,
+                "timestamp": simulation_start_time.isoformat(),
+                "execution_time_seconds": execution_time,
                 "success": True,
             }
 
@@ -171,16 +207,18 @@ class SimulationRunnerBase:
         except Exception as e:
             import traceback
 
-            error_msg = f"Simulation failed: {simulation_params.get('simulation_id', 'unknown')} - {str(e)}"
+            execution_time = (datetime.now() - simulation_start_time).total_seconds()
+            error_msg = f"[{simulation_id}] Simulation failed after {execution_time:.2f}s: {str(e)}"
             self.logger.error(error_msg)
-            self.logger.error(traceback.format_exc())
+            self.logger.error(f"[{simulation_id}] Traceback: {traceback.format_exc()}")
 
             # Record failure
             failure_record = {
                 **simulation_params,
                 "error": str(e),
                 "traceback": traceback.format_exc(),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": simulation_start_time.isoformat(),
+                "execution_time_seconds": execution_time,
                 "success": False,
             }
             self.failed_simulations.append(failure_record)

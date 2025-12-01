@@ -57,6 +57,7 @@ class SimulationEngine:
         season: str,
         week: int,
         power_profiles: Dict,
+        energy_data: Optional[EnergyData] = None,
     ):
         self.config = config
         self.controller = controller
@@ -71,7 +72,7 @@ class SimulationEngine:
             charge_rate_watts=config.charge_rate_watts,
         )
 
-        self.energy_data = EnergyData()
+        self.energy_data = energy_data if energy_data is not None else EnergyData()
         self.task_generator = TaskGenerator()
         self.logger = logging.getLogger(__name__)
 
@@ -224,9 +225,15 @@ class SimulationEngine:
 
     def _execute_task(self, task: Task) -> bool:
         """Execute a single task and return success status."""
+        sim_id = f"{self.location}_{self.season}_week{self.week}"
         battery_level = self.battery.get_percentage()
         clean_energy_pct = self._get_clean_energy_percentage(task.timestamp)
         available_models = self._get_available_models()
+
+        self.logger.debug(
+            f"[{sim_id}] Executing task at t={task.timestamp}s, "
+            f"battery={battery_level:.1f}%, clean_energy={clean_energy_pct:.1f}%"
+        )
 
         # Get controller decision
         choice = self.controller.select_model(
@@ -237,6 +244,10 @@ class SimulationEngine:
             available_models=available_models,
         )
 
+        self.logger.debug(
+            f"[{sim_id}] Controller selected model: {choice.model_name}, charge: {choice.should_charge}"
+        )
+
         # Check if selected model meets requirements
         model_specs = available_models[choice.model_name]
         meets_accuracy = model_specs["accuracy"] >= task.accuracy_requirement
@@ -245,6 +256,11 @@ class SimulationEngine:
         if not (meets_accuracy and meets_latency):
             task.missed_deadline = True
             self.metrics["missed_deadlines"] += 1
+            self.logger.debug(
+                f"[{sim_id}] Task missed deadline: model {choice.model_name} "
+                f"accuracy={model_specs['accuracy']:.3f} (need {task.accuracy_requirement:.3f}), "
+                f"latency={model_specs['latency']:.1f}ms (need {task.latency_requirement:.1f}ms)"
+            )
 
             # Track model-specific misses
             if choice.model_name in ["YOLOv10_N", "YOLOv10_S"]:
@@ -258,6 +274,11 @@ class SimulationEngine:
         power_mw = model_specs["power_cost"]
         duration_seconds = model_specs["latency"] / 1000  # Convert ms to seconds
 
+        self.logger.debug(
+            f"[{sim_id}] Executing inference: {choice.model_name}, "
+            f"power={power_mw}mW, duration={duration_seconds:.3f}s"
+        )
+
         # Try to discharge battery
         success = self.battery.discharge(
             power_mw=power_mw,
@@ -268,6 +289,7 @@ class SimulationEngine:
         if not success:
             task.missed_deadline = True
             self.metrics["missed_deadlines"] += 1
+            self.logger.debug(f"[{sim_id}] Task failed: insufficient battery")
             return False
 
         # Update task and metrics
@@ -291,25 +313,62 @@ class SimulationEngine:
         else:
             self.metrics["large_model_tasks"] += 1
 
+        self.logger.debug(
+            f"[{sim_id}] Task completed: battery now {self.battery.get_percentage():.1f}%"
+        )
+
         # Handle charging decision
         if choice.should_charge:
             self.battery.charge(self.config.task_interval_seconds)
+            self.logger.debug(
+                f"[{sim_id}] Charging battery for {self.config.task_interval_seconds}s"
+            )
 
         return True
 
     def run(self) -> Dict:
         """Run the complete simulation."""
-        self.logger.info(
-            f"Starting simulation: {self.location} {self.season} week {self.week}"
+        sim_id = f"{self.location}_{self.season}_week{self.week}"
+        self.logger.info(f"[{sim_id}] Starting simulation")
+        self.logger.debug(
+            f"[{sim_id}] Duration: {self.config.duration_days} days, "
+            f"task interval: {self.config.task_interval_seconds}s, "
+            f"time acceleration: {self.config.time_acceleration}x"
         )
 
         duration_seconds = self.config.duration_days * 24 * 3600
         task_interval = self.config.task_interval_seconds
+        total_iterations = int(duration_seconds / task_interval)
 
         start_time = time.time()
+        last_progress_time = start_time
+        progress_interval = 30.0  # Log progress every 30 seconds
 
-        for timestamp in range(0, int(duration_seconds), task_interval):
+        for iteration, timestamp in enumerate(
+            range(0, int(duration_seconds), task_interval)
+        ):
             self.current_time = timestamp
+
+            # Log progress periodically
+            current_time = time.time()
+            if current_time - last_progress_time >= progress_interval:
+                progress = (iteration / total_iterations) * 100
+                elapsed = current_time - start_time
+                eta = (
+                    (elapsed / iteration * (total_iterations - iteration))
+                    if iteration > 0
+                    else 0
+                )
+                self.logger.info(
+                    f"[{sim_id}] Progress: {progress:.1f}% ({iteration}/{total_iterations}), "
+                    f"elapsed: {elapsed:.1f}s, ETA: {eta:.1f}s"
+                )
+                self.logger.debug(
+                    f"[{sim_id}] Current metrics: {self.metrics['total_tasks']} tasks, "
+                    f"{self.metrics['completed_tasks']} completed, "
+                    f"battery: {self.battery.get_percentage():.1f}%"
+                )
+                last_progress_time = current_time
 
             # Generate task
             task = self.task_generator.generate_task(
@@ -334,7 +393,12 @@ class SimulationEngine:
                 )  # Minimal delay for acceleration
 
         elapsed = time.time() - start_time
-        self.logger.info(f"Simulation completed in {elapsed:.2f} seconds")
+        self.logger.info(f"[{sim_id}] Simulation completed in {elapsed:.2f} seconds")
+        self.logger.debug(
+            f"[{sim_id}] Final state: {self.metrics['total_tasks']} total tasks, "
+            f"{self.metrics['completed_tasks']} completed, "
+            f"{self.metrics['missed_deadlines']} missed deadlines"
+        )
 
         # Calculate final metrics
         self._calculate_final_metrics()
