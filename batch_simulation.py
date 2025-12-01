@@ -290,7 +290,7 @@ def main():
         # Create batch simulation runner
         runner = BatchSimulationRunner(
             config_path="config.jsonc",
-            max_workers=8,  # Parallel execution with 8 workers
+            max_workers=30,  # Parallel execution with 8 workers
         )
 
         # Run batch simulations in parallel
