@@ -67,21 +67,39 @@ def solve_mips_scenario(
     }
     charge_var = pulp.LpVariable("charge", cat="Binary")
 
+    # Normalize all objectives to 0-1 range for equal weighting
+    max_accuracy = max(specs["accuracy"] for specs in available_models.values())
+    min_accuracy = min(specs["accuracy"] for specs in available_models.values())
+    max_latency = max(specs["latency"] for specs in available_models.values())
+    min_latency = min(specs["latency"] for specs in available_models.values())
+    
+    # Smart charging logic in objective function
+    # Add bonus for charging when battery is low
+    battery_urgency_bonus = max(0, (50 - battery_level) / 50.0)  # 0-1 range
+    
+    # Add bonus for charging during high clean energy
+    clean_energy_bonus = clean_energy_percentage / 100.0  # 0-1 range
+    
+    # Penalty for charging when battery is already high
+    battery_waste_penalty = max(0, (battery_level - 80) / 20.0) if battery_level > 80 else 0  # 0-1 range
+    
     prob += (
+        # Normalized accuracy (0-1 range, higher is better)
         pulp.lpSum(
             [
-                available_models[name]["accuracy"] * model_vars[name]
+                ((available_models[name]["accuracy"] - min_accuracy) / (max_accuracy - min_accuracy)) * model_vars[name]
                 for name in available_models.keys()
             ]
         )
-        - 0.001
-        * pulp.lpSum(
+        # Normalized latency (0-1 range, lower is better, so subtract)
+        - pulp.lpSum(
             [
-                available_models[name]["latency"] * model_vars[name]
+                ((available_models[name]["latency"] - min_latency) / (max_latency - min_latency)) * model_vars[name]
                 for name in available_models.keys()
             ]
         )
-        + 0.01 * clean_energy_percentage * charge_var
+        # Smart charging decision (combines urgency, opportunity, and waste avoidance)
+        + (battery_urgency_bonus * 0.4 + clean_energy_bonus * 0.4 - battery_waste_penalty * 0.2) * charge_var
     )
 
     prob += pulp.lpSum(model_vars.values()) == 1
@@ -111,7 +129,18 @@ def solve_mips_scenario(
         if specs["latency"] > latency_requirement:
             prob += model_vars[name] == 0
 
-    prob += battery_level + charge_var * 10 <= 100
+    # Battery capacity constraint
+    prob += battery_level + charge_var * 15 <= 100
+    
+    # Smart charging logic in objective function
+    # Add bonus for charging when battery is low
+    battery_urgency_bonus = max(0, (50 - battery_level) / 50.0)  # 0-1 range
+    
+    # Add bonus for charging during high clean energy
+    clean_energy_bonus = clean_energy_percentage / 100.0  # 0-1 range
+    
+    # Penalty for charging when battery is already high
+    battery_waste_penalty = max(0, (battery_level - 80) / 20.0) if battery_level > 80 else 0  # 0-1 range
 
     prob.solve(pulp.PULP_CBC_CMD(msg=False))
 
@@ -182,7 +211,7 @@ def main():
     training_data = []
 
     # Use ProcessPoolExecutor for parallel execution
-    max_workers = 8  # Adjust based on your CPU cores
+    max_workers = 20  # Adjust based on your CPU cores
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
         # Submit all scenarios for processing
         future_to_scenario = {
